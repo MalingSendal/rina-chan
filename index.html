@@ -16,15 +16,36 @@
     <div id="chat-container">
         <div id="chat-header">
             <span id="chat-title">Rina-chan</span>
-            <div class="nsfw-toggle-container">
-                <span class="nsfw-toggle-label">NSFW</span>
-                <button class="toggle-switch" id="nsfw-toggle" aria-label="Toggle NSFW mode"></button>
+            <div class="header-controls">
+                <button id="memory-btn" aria-label="View memory stats" title="Memory Info">💭</button>
+                <div class="nsfw-toggle-container">
+                    <span class="nsfw-toggle-label">NSFW</span>
+                    <button class="toggle-switch" id="nsfw-toggle" aria-label="Toggle NSFW mode"></button>
+                </div>
+                <!-- DEBUG: Mood display toggle (remove for production) -->
+                <button id="mood-debug-toggle" title="Toggle mood debug" style="margin-left:8px">🐞</button>
+                <!-- DEBUG: Expression control toggle (REMOVE FOR PRODUCTION) -->
+                <button id="expr-debug-toggle" title="Toggle expression debug" style="margin-left:6px">🎛️</button>
             </div>
         </div>
         <div id="chat-messages"></div>
         <div id="chat-input-container">
             <input id="chat-input" type="text" placeholder="Say something to Rina-chan..." />
             <button id="send-btn">Send</button>
+        </div>
+    </div>
+
+    <!-- Memory Modal -->
+    <div id="memory-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Rina-chan's Memories 💭</h2>
+                <button class="modal-close" id="memory-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="memory-stats"></div>
+                <div id="memory-details"></div>
+            </div>
         </div>
     </div>
 
@@ -101,6 +122,11 @@
                 const data = await response.json();
                 removeTypingIndicator();
                 addBotMessage(data.response);
+                // Apply unseen mood to Live2D model (mood is not displayed in chat)
+                if (data.mood) {
+                    try { applyMoodToModel(data.mood); } catch (e) { console.debug('Mood apply failed', e); }
+                    try { showMoodDebug(data.mood); } catch (e) { /* ignore if debug API missing */ }
+                }
             } catch (error) {
                 console.error('Chat error:', error);
                 removeTypingIndicator();
@@ -156,12 +182,266 @@
             return div.innerHTML;
         }
 
-        // Initial greeting
-        window.addEventListener('load', () => {
-            setTimeout(() => {
-                addBotMessage("Hi there! I'm Rina-chan. What's on your mind? 💕");
-            }, 500);
+        // DEBUG: Mood debug UI (visible tag) - REMOVE FOR PRODUCTION
+        // Toggling this shows the hidden mood tags in the UI to help map model expressions.
+        const moodDebugToggleBtn = document.getElementById('mood-debug-toggle');
+        let moodDebug = localStorage.getItem('moodDebug') === 'true';
+
+        // Create a small badge to show the current mood when debug is enabled
+        const moodBadge = document.createElement('div');
+        moodBadge.id = 'mood-debug-badge';
+        moodBadge.style.cssText = 'position:fixed;right:16px;bottom:120px;background:rgba(0,0,0,0.6);color:#fff;padding:6px 10px;border-radius:10px;font-size:14px;display:none;z-index:9999;';
+        document.body.appendChild(moodBadge);
+
+        function updateMoodBadgeVisibility() {
+            moodBadge.style.display = moodDebug ? 'block' : 'none';
+            moodDebugToggleBtn.classList.toggle('active', moodDebug);
+        }
+
+        moodDebugToggleBtn.addEventListener('click', () => {
+            moodDebug = !moodDebug;
+            localStorage.setItem('moodDebug', moodDebug ? 'true' : 'false');
+            updateMoodBadgeVisibility();
         });
+
+        function showMoodDebug(mood) {
+            // Only show if debug enabled
+            if (!moodDebug || !mood) return;
+            moodBadge.textContent = `Mood: ${mood}`;
+            // Keep it visible for a short time to help mapping
+            moodBadge.style.opacity = '1';
+            setTimeout(() => {
+                moodBadge.style.opacity = '0.9';
+            }, 250);
+        }
+
+        updateMoodBadgeVisibility();
+
+        // Initial load: restore chat history and memory stats, then greet if empty
+        async function loadChatHistory() {
+            try {
+                const response = await fetch('/memory/history');
+                if (!response.ok) return false;
+                const data = await response.json();
+                if (data.success && Array.isArray(data.history) && data.history.length > 0) {
+                    // Sort chronologically by timestamp
+                    const hist = data.history.slice().sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                    chatMessages.innerHTML = '';
+                    for (const entry of hist) {
+                        if (entry.user) addUserMessage(entry.user);
+                        if (entry.bot) addBotMessage(entry.bot);
+                    }
+                    return true;
+                }
+            } catch (err) {
+                console.error('Failed to load chat history:', err);
+            }
+            return false;
+        }
+
+        window.addEventListener('load', async () => {
+            try {
+                const hadHistory = await loadChatHistory();
+                await loadMemoryStats();
+                if (!hadHistory) {
+                    setTimeout(() => {
+                        addBotMessage("Hi there! I'm Rina-chan. What's on your mind? 💕");
+                    }, 500);
+                }
+            } catch (e) {
+                console.error('Startup load error:', e);
+                setTimeout(() => {
+                    addBotMessage("Hi there! I'm Rina-chan. What's on your mind? 💕");
+                }, 500);
+            }
+        });
+
+        // ===== DEBUG: Expression Control Panel (REMOVE FOR PRODUCTION) =====
+        // Provides quick buttons to trigger model expressions for mapping/tuning.
+        let lastExpressionTimer = null;
+        (function addExpressionDebugPanel() {
+            const toggle = document.getElementById('expr-debug-toggle');
+            if (!toggle) return;
+
+            const panel = document.createElement('div');
+            panel.id = 'expr-debug-panel';
+            panel.style.cssText = 'position:fixed;right:16px;bottom:160px;background:rgba(0,0,0,0.6);color:#fff;padding:10px;border-radius:10px;font-size:13px;display:none;z-index:9999;max-width:220px;';
+
+            panel.innerHTML = `
+                <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    <button class="expr-btn">Angry</button>
+                    <button class="expr-btn">OOFace</button>
+                    <button class="expr-btn">Sweat</button>
+                    <button class="expr-btn">Doya</button>
+                    <button class="expr-btn">Frightened</button>
+                    <button class="expr-btn">Hair Change</button>
+                    <button class="expr-btn">OutFit Change</button>
+                    <button class="expr-btn">@@</button>
+                    <button class="expr-btn">Neutral</button>
+                </div>
+                <div style="margin-top:8px;font-size:11px;opacity:0.9">DEBUG: Press a button to force expression. Remove this panel before deploy.</div>
+            `;
+
+            document.body.appendChild(panel);
+
+            toggle.addEventListener('click', () => {
+                const computedDisplay = window.getComputedStyle(panel).display;
+                console.log('[Toggle] Button clicked');
+                console.log('[Toggle] panel.style.display:', panel.style.display);
+                console.log('[Toggle] computed display:', computedDisplay);
+                
+                const wasOpen = panel.style.display === 'block'; // Check for explicit block state
+                console.log('[Toggle] wasOpen (explicit block check):', wasOpen);
+                
+                // Toggle the display
+                panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+                console.log('[Toggle] After toggle, panel.style.display:', panel.style.display);
+                
+                // Return to idle when panel is closed (wasOpen means it was open before toggle)
+                if (wasOpen) {
+                    console.log('[Toggle] Panel was open, calling debugReturnToIdle()');
+                    if (typeof debugReturnToIdle === 'function') {
+                        debugReturnToIdle();
+                    } else {
+                        console.error('[Toggle] debugReturnToIdle is not a function!');
+                    }
+                } else {
+                    console.log('[Toggle] Panel was closed, opening it (no reset)');
+                }
+            });
+
+            panel.addEventListener('click', (e) => {
+                const btn = e.target.closest('.expr-btn');
+                if (!btn) return;
+                const name = btn.textContent.trim();
+                debugApplyExpression(name);
+            });
+
+            // Expose for tests
+            window._exprDebugPanel = panel;
+        })();
+
+        // ===== MEMORY SYSTEM =====
+        const memoryBtn = document.getElementById('memory-btn');
+        const memoryModal = document.getElementById('memory-modal');
+        const memoryClose = document.getElementById('memory-close');
+
+        memoryBtn.addEventListener('click', () => {
+            memoryModal.style.display = 'block';
+            loadMemoryStats();
+        });
+
+        memoryClose.addEventListener('click', () => {
+            memoryModal.style.display = 'none';
+        });
+
+        window.addEventListener('click', (e) => {
+            if (e.target === memoryModal) {
+                memoryModal.style.display = 'none';
+            }
+        });
+
+        async function loadMemoryStats() {
+            try {
+                const response = await fetch('/memory/stats');
+                const data = await response.json();
+
+                if (data.success) {
+                    const stats = data.stats;
+                    const statsDiv = document.getElementById('memory-stats');
+                    const detailsDiv = document.getElementById('memory-details');
+
+                    // Create relationship bar
+                    const relLevel = stats.relationship_level || 0;
+                    const relBarFill = Math.min(relLevel, 100);
+                    
+                    statsDiv.innerHTML = `
+                        <div class="memory-section">
+                            <h3>👤 About You</h3>
+                            <div class="memory-stat">
+                                <span class="label">Name:</span>
+                                <span class="value">${escapeHtml(stats.user_name)}</span>
+                            </div>
+                        </div>
+
+                        <div class="memory-section">
+                            <h3>💗 Our Relationship</h3>
+                            <div class="memory-stat" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                                <span class="label">${escapeHtml(stats.relationship_stage)}</span>
+                                <div style="width: 100%; background: #e0e0e0; border-radius: 10px; height: 10px; overflow: hidden;">
+                                    <div style="background: linear-gradient(90deg, #ff6b9d 0%, #c44569 100%); height: 100%; width: ${relBarFill}%; transition: width 0.3s ease;"></div>
+                                </div>
+                                <span class="value">${relLevel}/100 intimacy</span>
+                            </div>
+                        </div>
+                        
+                        <div class="memory-section">
+                            <h3>📊 Statistics</h3>
+                            <div class="memory-stat">
+                                <span class="label">Conversations:</span>
+                                <span class="value">${stats.conversation_count}</span>
+                            </div>
+                            <div class="memory-stat">
+                                <span class="label">Messages Saved:</span>
+                                <span class="value">${stats.total_saved_messages}</span>
+                            </div>
+                            <div class="memory-stat">
+                                <span class="label">Facts Learned:</span>
+                                <span class="value">${stats.learned_facts_count}</span>
+                            </div>
+                            <div class="memory-stat">
+                                <span class="label">Interests:</span>
+                                <span class="value">${stats.interests_count}</span>
+                            </div>
+                            <div class="memory-stat">
+                                <span class="label">Preferences:</span>
+                                <span class="value">${stats.preferences_count}</span>
+                            </div>
+                        </div>
+                    `;
+
+                    // Show Rina's conclusions
+                    if (stats.personality_traits && stats.personality_traits.length > 0) {
+                        statsDiv.innerHTML += `
+                            <div class="memory-section">
+                                <h3>✨ Rina's Observations</h3>
+                                <div class="memory-stat">
+                                    <span class="label">Personality Traits I've noticed:</span>
+                                    <span class="value">${stats.personality_traits.join(', ')}</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    // Show Rina's personal thoughts
+                    if (stats.rina_conclusions && Object.keys(stats.rina_conclusions).length > 0) {
+                        let conclusionsHtml = '<div class="memory-section"><h3>💭 What I Think About You</h3>';
+                        
+                        for (const [key, value] of Object.entries(stats.rina_conclusions)) {
+                            conclusionsHtml += `<div class="rina-thought">"${escapeHtml(value)}"</div>`;
+                        }
+                        
+                        conclusionsHtml += '</div>';
+                        statsDiv.innerHTML += conclusionsHtml;
+                    }
+
+                    if (stats.last_conversation) {
+                        const lastDate = new Date(stats.last_conversation).toLocaleDateString();
+                        statsDiv.innerHTML += `
+                            <div class="memory-section">
+                                <h3>⏰ Timeline</h3>
+                                <div class="memory-stat">
+                                    <span class="label">Last Chat:</span>
+                                    <span class="value">${lastDate}</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading memory:', error);
+            }
+        }
 
         // ===== FULLSCREEN BUTTON =====
         const fullscreenBtn = document.getElementById('fullscreen-btn');
@@ -218,9 +498,42 @@
                     model.motionManager.startRandomMotion('Idle', 3);
                 }
 
-                window.addEventListener('pointermove', (e) => {
-                    model.focus(e.clientX, e.clientY);
-                });
+                // Ensure the model does NOT follow the mouse pointer.
+                // Aggressively disable any pointer-follow behavior from plugins or global handlers.
+                try {
+                    // Disable PIXI interaction on the model and stage
+                    model.interactive = false;
+                    model.interactiveChildren = false;
+                    app.stage.interactive = false;
+                    app.stage.interactiveChildren = false;
+
+                    // Remove common listeners that some plugins attach to the model instance
+                    try { if (typeof model.removeAllListeners === 'function') { model.removeAllListeners(); } } catch(e){}
+
+                    // Remove any global pointer/mouse listeners that might drive the model
+                    const pointerEvents = ['pointermove','mousemove','pointerover','pointerout','pointerenter','pointerleave','pointerdown','pointerup'];
+                    for (const ev of pointerEvents) {
+                        try { window.removeEventListener(ev, window._live2d_pointer_handler, { passive: true }); } catch(e){}
+                        try { document.removeEventListener(ev, window._live2d_pointer_handler, { passive: true }); } catch(e){}
+                        try { window[ev] = null; } catch(e){}
+                        try { document[ev] = null; } catch(e){}
+                    }
+
+                    // As a final and reliable fallback: override the model.focus method (used by many demos)
+                    if (typeof model.focus === 'function') {
+                        model.focus = function() { /* no-op to prevent mouse look */ };
+                    }
+
+                    // NOTE: Removed parameter blocking wrapper to allow natural blinking animation.
+                    // The model's eye blink animation uses ParamEyeLOpen/ParamEyeROpen.
+                    // Pointer events on canvas are disabled, so no mouse-follow interference occurs.
+
+                    // Prevent pointer events on canvas element as additional safety
+                    const canvasEl = document.getElementById('canvas');
+                    if (canvasEl) canvasEl.style.pointerEvents = 'none';
+                } catch (e) {
+                    console.debug('Failed to fully disable pointer interactions for model', e);
+                }
 
                 // Add resize listener BEFORE adding to stage
                 window.addEventListener('resize', () => {
@@ -233,11 +546,230 @@
                 });
 
                 console.log('Model loaded successfully – fully local!');
+                // Expose model globally so other UI code can control expressions
+                window.rinaModel = model;
+
+                // Load expression templates included in the model folder (files named (Exp)... .exp3.json)
+                (async function loadExpressionTemplates() {
+                    const exprFiles = [
+                        '(Exp)Angry.exp3.json',
+                        '(Exp)OOFace.exp3.json',
+                        '(Exp)Sweat.exp3.json',
+                        '(Exp)doya.exp3.json',
+                        '(Exp)Frightened.exp3.json',
+                        '(Exp)Hair Change.exp3.json',
+                        '(Exp)OutFit Change.exp3.json',
+                        '(Exp)@@.exp3.json'
+                    ];
+
+                    window.rinaExpressions = {};
+
+                    for (const fname of exprFiles) {
+                        try {
+                            const url = `./KITU_RE23/${encodeURIComponent(fname)}`.replace(/%28/g, '(').replace(/%29/g, ')');
+                            const res = await fetch(url);
+                            if (!res.ok) continue;
+                            const json = await res.json();
+                            // Normalize key name: strip (Exp) prefix and extension
+                            let key = fname.replace(/\(Exp\)/i, '').replace(/\.exp3\.json$/i, '').trim().toLowerCase();
+                            // store parameters array for later application
+                            if (json && Array.isArray(json.Parameters)) {
+                                window.rinaExpressions[key] = json.Parameters;
+                            }
+                        } catch (e) {
+                            // ignore missing files
+                        }
+                    }
+                    console.log('Loaded expression templates:', Object.keys(window.rinaExpressions));
+                })();
             } catch (err) {
                 console.error('Error:', err);
                 alert('Model failed to load – check console (path/files?).');
             }
         })();
+
+        // Map a semantic mood string to one of the loaded expression template keys.
+        // Preferred mapping order is implemented where the mood may map to multiple
+        // possible templates (we pick the first available).
+        function mapMoodToExpressionKey(mood) {
+            if (!mood) return null;
+            const m = (mood || '').toLowerCase().trim();
+
+            // Helper to check existence and return first available
+            const pickAvailable = (candidates) => {
+                if (!window.rinaExpressions) return null;
+                for (const c of candidates) {
+                    if (c && window.rinaExpressions[c]) return c;
+                }
+                return null;
+            };
+
+            // Angry group: angry, upset, disappointed, annoyed
+            if (m.includes('angry') || m.includes('upset') || m.includes('disappoint') || m.includes('annoy')) {
+                return pickAvailable(['angry']);
+            }
+
+            // Surprised group: prefer '@@' expression if present, otherwise OOFace
+            if (m.includes('surprised') || m.includes('startled') || m.includes('shocked')) {
+                return pickAvailable(['@@', 'ooface']);
+            }
+
+            // Frightened group: frightened, scared, fear
+            if (m.includes('fright') || m.includes('scared') || m.includes('fear')) {
+                return pickAvailable(['frightened']);
+            }
+
+            // Happy / neutral group: happy, neutral, content
+            if (m.includes('happy') || m.includes('neutral') || m.includes('content') || m.includes('calm') || m.includes('playful')) {
+                return pickAvailable(['doya']);
+            }
+
+            // Nervous group: nervous, anxious, worried
+            if (m.includes('nervous') || m.includes('anxious') || m.includes('worried')) {
+                return pickAvailable(['sweat']);
+            }
+
+            // Fallback: attempt exact key match
+            const exact = m.replace(/\s+/g, '').toLowerCase();
+            if (window.rinaExpressions && window.rinaExpressions[exact]) return exact;
+
+            return null;
+        }
+
+        // Apply a mood to the Live2D model using only the loaded (Exp) templates.
+        // This will prefer mapped templates per your mapping rules and do nothing
+        // if no matching template exists.
+        function applyMoodToModel(mood) {
+            const m = window.rinaModel;
+            if (!m) return;
+            try {
+                const mappedKey = mapMoodToExpressionKey(mood);
+                if (!mappedKey) {
+                    console.log('No mapped expression key for mood:', mood);
+                    return;
+                }
+
+                if (window.rinaExpressions && window.rinaExpressions[mappedKey]) {
+                    const params = window.rinaExpressions[mappedKey];
+                    if (m.internalModel && m.internalModel.coreModel && typeof m.internalModel.coreModel.setParameterValueById === 'function') {
+                        const core = m.internalModel.coreModel;
+                        try {
+                            for (const p of params) {
+                                if (p && p.Id) core.setParameterValueById(p.Id, p.Value);
+                            }
+                            showMoodDebug(`mood:${mood}->${mappedKey}`);
+                            // Auto-return to idle after 10 seconds
+                            if (lastExpressionTimer) clearTimeout(lastExpressionTimer);
+                            lastExpressionTimer = setTimeout(() => {
+                                console.log('[Timer] 10s mood template timeout fired, returning to idle');
+                                debugReturnToIdle();
+                            }, 10000);
+                            console.log('[Timer] Set 10s idle reset for mood template:', mood, '->', mappedKey);
+                            return;
+                        } catch (e) {
+                            console.debug('Failed to apply mood template', e);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.debug('applyMoodToModel failed:', err);
+            }
+        }
+
+        // DEBUG helper: return model to idle/neutral state (REMOVE FOR PRODUCTION)
+        function debugReturnToIdle() {
+            const m = window.rinaModel;
+            console.log('debugReturnToIdle called, model exists:', !!m);
+            if (!m) {
+                console.warn('Model not loaded, cannot return to idle');
+                return;
+            }
+            
+            if (lastExpressionTimer) {
+                clearTimeout(lastExpressionTimer);
+                lastExpressionTimer = null;
+            }
+            
+            // Strategy: Use expression templates for idle/neutral state
+            try {
+                if (m.internalModel && m.internalModel.coreModel && typeof m.internalModel.coreModel.setParameterValueById === 'function') {
+                    const core = m.internalModel.coreModel;
+                    // Reset to neutral/default eye and mouth parameters (the initial state when model loads)
+                    core.setParameterValueById('ParamMouthOpenY', 0.25);
+                    core.setParameterValueById('ParamEyeLOpen', 0.9);
+                    core.setParameterValueById('ParamEyeROpen', 0.9);
+                    core.setParameterValueById('ParamBrowLY', 0);
+                    core.setParameterValueById('ParamBrowRY', 0);
+                    console.log('Reset to neutral/idle expression');
+                }
+            } catch (e) {
+                console.debug('Failed to reset to idle state', e);
+            }
+
+            // Also reset parameters to neutral default to ensure expression is cleared
+            try {
+                if (m.internalModel && m.internalModel.coreModel && typeof m.internalModel.coreModel.setParameterValueById === 'function') {
+                    const core = m.internalModel.coreModel;
+                    // Reset to neutral/default eye and mouth parameters
+                    core.setParameterValueById('ParamMouthOpenY', 0.25);
+                    core.setParameterValueById('ParamEyeLOpen', 0.9);
+                    core.setParameterValueById('ParamEyeROpen', 0.9);
+                    core.setParameterValueById('ParamBrowLY', 0);
+                    core.setParameterValueById('ParamBrowRY', 0);
+                    console.log('Reset neutral parameters');
+                }
+            } catch (e) {
+                console.debug('Failed to reset parameters', e);
+            }
+        }
+
+        // DEBUG helper: force an expression using only the loaded (Exp) templates
+        // (REMOVE FOR PRODUCTION) - This will NOT attempt motions or manual parameter fallbacks
+        function debugApplyExpression(name) {
+            const m = window.rinaModel;
+            if (!m) {
+                console.warn('Model not loaded yet for debugApplyExpression');
+                return;
+            }
+
+            // Clear previous timer
+            if (lastExpressionTimer) {
+                clearTimeout(lastExpressionTimer);
+            }
+
+            const key = (name || '').toLowerCase().trim();
+
+            try {
+                if (window.rinaExpressions && window.rinaExpressions[key]) {
+                    const params = window.rinaExpressions[key];
+                    if (m.internalModel && m.internalModel.coreModel && typeof m.internalModel.coreModel.setParameterValueById === 'function') {
+                        const core = m.internalModel.coreModel;
+                        try {
+                            for (const p of params) {
+                                if (p && p.Id) core.setParameterValueById(p.Id, p.Value);
+                            }
+                            showMoodDebug(`${name}`);
+                            // Auto-return to idle after 10 seconds
+                            if (lastExpressionTimer) clearTimeout(lastExpressionTimer);
+                            lastExpressionTimer = setTimeout(() => {
+                                console.log('[Timer] 10s template timeout fired, returning to idle');
+                                debugReturnToIdle();
+                            }, 10000);
+                            console.log('[Timer] Set 10s idle reset for expr template:', name);
+                            return;
+                        } catch (e) {
+                            console.debug('Failed to apply expression template', e);
+                        }
+                    }
+                } else {
+                    console.log('No expression template for debug button:', name, '- returning to idle');
+                    // If no template exists for this label, return to idle to avoid incorrect faces
+                    debugReturnToIdle();
+                }
+            } catch (e) {
+                console.debug('debugApplyExpression failed:', e);
+            }
+        }
     </script>
 </body>
 </html>
