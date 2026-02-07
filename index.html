@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rina-chan AI Companion</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+
+    <!-- Fullscreen Button -->
+    <button id="fullscreen-btn" aria-label="Toggle fullscreen">⛶</button>
+
+    <!-- Chat Container -->
+    <div id="chat-container">
+        <div id="chat-header">
+            <span id="chat-title">Rina-chan</span>
+            <div class="nsfw-toggle-container">
+                <span class="nsfw-toggle-label">NSFW</span>
+                <button class="toggle-switch" id="nsfw-toggle" aria-label="Toggle NSFW mode"></button>
+            </div>
+        </div>
+        <div id="chat-messages"></div>
+        <div id="chat-input-container">
+            <input id="chat-input" type="text" placeholder="Say something to Rina-chan..." />
+            <button id="send-btn">Send</button>
+        </div>
+    </div>
+
+    <!-- All local now -->
+    <script src="js/pixi.min.js"></script>
+    <script>
+        window.PIXI = PIXI;  // Still needed
+        console.log('PixiJS loaded locally');
+    </script>
+
+    <script src="js/live2dcubismcore.min.js"></script>
+
+    <script src="js/cubism4.min.js"></script>
+
+    <script>
+        // Backend API Configuration (using relative URL for same origin)
+        const API_BASE_URL = '';
+
+        // ===== CHAT SYSTEM =====
+        const chatMessages = document.getElementById('chat-messages');
+        const chatInput = document.getElementById('chat-input');
+        const sendBtn = document.getElementById('send-btn');
+        const nsfwToggle = document.getElementById('nsfw-toggle');
+        let nsfwMode = false;
+        let isWaitingForResponse = false;
+
+        // Initialize NSFW toggle
+        nsfwToggle.addEventListener('click', () => {
+            nsfwMode = !nsfwMode;
+            nsfwToggle.classList.toggle('active');
+            addBotMessage(nsfwMode ? "Hehe... you activated something interesting~" : "Back to normal mode!");
+        });
+
+        // Send message on Enter key
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !isWaitingForResponse) {
+                sendMessage();
+            }
+        });
+
+        sendBtn.addEventListener('click', () => {
+            if (!isWaitingForResponse) {
+                sendMessage();
+            }
+        });
+
+        async function sendMessage() {
+            const message = chatInput.value.trim();
+            if (!message) return;
+
+            chatInput.value = '';
+            addUserMessage(message);
+            isWaitingForResponse = true;
+            sendBtn.disabled = true;
+
+            showTypingIndicator();
+
+            try {
+                const response = await fetch(`/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        nsfw_mode: nsfwMode
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                removeTypingIndicator();
+                addBotMessage(data.response);
+            } catch (error) {
+                console.error('Chat error:', error);
+                removeTypingIndicator();
+                addBotMessage("Hmph... Something went wrong. Try again, will you?");
+            } finally {
+                isWaitingForResponse = false;
+                sendBtn.disabled = false;
+                chatInput.focus();
+            }
+        }
+
+        function addUserMessage(text) {
+            const messageEl = document.createElement('div');
+            messageEl.className = 'message user';
+            messageEl.innerHTML = `<div class="message-content">${escapeHtml(text)}</div>`;
+            chatMessages.appendChild(messageEl);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function addBotMessage(text) {
+            const messageEl = document.createElement('div');
+            messageEl.className = 'message bot';
+            messageEl.innerHTML = `<div class="message-content">${escapeHtml(text)}</div>`;
+            chatMessages.appendChild(messageEl);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function showTypingIndicator() {
+            const messageEl = document.createElement('div');
+            messageEl.className = 'message bot';
+            messageEl.id = 'typing-indicator';
+            messageEl.innerHTML = `
+                <div class="typing-indicator">
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                </div>
+            `;
+            chatMessages.appendChild(messageEl);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function removeTypingIndicator() {
+            const indicator = document.getElementById('typing-indicator');
+            if (indicator) {
+                indicator.remove();
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Initial greeting
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                addBotMessage("Hi there! I'm Rina-chan. What's on your mind? 💕");
+            }, 500);
+        });
+
+        // ===== FULLSCREEN BUTTON =====
+        const fullscreenBtn = document.getElementById('fullscreen-btn');
+        
+        fullscreenBtn.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.log(`Error attempting to enable fullscreen: ${err.message}`);
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        });
+
+        // Update button text when fullscreen state changes
+        document.addEventListener('fullscreenchange', () => {
+            fullscreenBtn.textContent = document.fullscreenElement ? '⛶' : '⛶';
+        });
+
+        // ===== LIVE2D SYSTEM =====
+        (async function main() {
+            console.log('Live2D plugin loaded:', !!PIXI.live2d);
+
+            if (!PIXI.live2d) {
+                alert('Live2D plugin not loaded – check file paths and console.');
+                return;
+            }
+
+            const app = new PIXI.Application({
+                view: document.getElementById('canvas'),
+                autoStart: true,
+                resizeTo: window,
+                backgroundAlpha: 0
+            });
+
+            const modelPath = './KITU_RE23/KITU_RE23.model3.json';
+
+            function centerModel(model, app) {
+                model.x = app.renderer.width / 2;
+                model.y = app.renderer.height / 2 + 250;
+            }
+
+            try {
+                console.log('Loading model from:', modelPath);
+                const model = await PIXI.live2d.Live2DModel.from(modelPath);
+
+                app.stage.addChild(model);
+
+                model.scale.set(0.2);
+                model.anchor.set(0.5, 0.5);
+                centerModel(model, app);
+
+                if (model.motionManager) {
+                    model.motionManager.startRandomMotion('Idle', 3);
+                }
+
+                window.addEventListener('pointermove', (e) => {
+                    model.focus(e.clientX, e.clientY);
+                });
+
+                // Add resize listener BEFORE adding to stage
+                window.addEventListener('resize', () => {
+                    centerModel(model, app);
+                });
+
+                // Also add app resize listener for immediate updates
+                app.renderer.on('resize', () => {
+                    centerModel(model, app);
+                });
+
+                console.log('Model loaded successfully – fully local!');
+            } catch (err) {
+                console.error('Error:', err);
+                alert('Model failed to load – check console (path/files?).');
+            }
+        })();
+    </script>
+</body>
+</html>
