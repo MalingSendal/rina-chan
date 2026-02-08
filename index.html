@@ -24,8 +24,6 @@
                 </div>
                 <!-- DEBUG: Mood display toggle (remove for production) -->
                 <button id="mood-debug-toggle" title="Toggle mood debug" style="margin-left:8px">🐞</button>
-                <!-- DEBUG: Expression control toggle (REMOVE FOR PRODUCTION) -->
-                <button id="expr-debug-toggle" title="Toggle expression debug" style="margin-left:6px">🎛️</button>
             </div>
         </div>
         <div id="chat-messages"></div>
@@ -256,70 +254,7 @@
             }
         });
 
-        // ===== DEBUG: Expression Control Panel (REMOVE FOR PRODUCTION) =====
-        // Provides quick buttons to trigger model expressions for mapping/tuning.
         let lastExpressionTimer = null;
-        (function addExpressionDebugPanel() {
-            const toggle = document.getElementById('expr-debug-toggle');
-            if (!toggle) return;
-
-            const panel = document.createElement('div');
-            panel.id = 'expr-debug-panel';
-            panel.style.cssText = 'position:fixed;right:16px;bottom:160px;background:rgba(0,0,0,0.6);color:#fff;padding:10px;border-radius:10px;font-size:13px;display:none;z-index:9999;max-width:220px;';
-
-            panel.innerHTML = `
-                <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                    <button class="expr-btn">Angry</button>
-                    <button class="expr-btn">OOFace</button>
-                    <button class="expr-btn">Sweat</button>
-                    <button class="expr-btn">Doya</button>
-                    <button class="expr-btn">Frightened</button>
-                    <button class="expr-btn">Hair Change</button>
-                    <button class="expr-btn">OutFit Change</button>
-                    <button class="expr-btn">@@</button>
-                    <button class="expr-btn">Neutral</button>
-                </div>
-                <div style="margin-top:8px;font-size:11px;opacity:0.9">DEBUG: Press a button to force expression. Remove this panel before deploy.</div>
-            `;
-
-            document.body.appendChild(panel);
-
-            toggle.addEventListener('click', () => {
-                const computedDisplay = window.getComputedStyle(panel).display;
-                console.log('[Toggle] Button clicked');
-                console.log('[Toggle] panel.style.display:', panel.style.display);
-                console.log('[Toggle] computed display:', computedDisplay);
-                
-                const wasOpen = panel.style.display === 'block'; // Check for explicit block state
-                console.log('[Toggle] wasOpen (explicit block check):', wasOpen);
-                
-                // Toggle the display
-                panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
-                console.log('[Toggle] After toggle, panel.style.display:', panel.style.display);
-                
-                // Return to idle when panel is closed (wasOpen means it was open before toggle)
-                if (wasOpen) {
-                    console.log('[Toggle] Panel was open, calling debugReturnToIdle()');
-                    if (typeof debugReturnToIdle === 'function') {
-                        debugReturnToIdle();
-                    } else {
-                        console.error('[Toggle] debugReturnToIdle is not a function!');
-                    }
-                } else {
-                    console.log('[Toggle] Panel was closed, opening it (no reset)');
-                }
-            });
-
-            panel.addEventListener('click', (e) => {
-                const btn = e.target.closest('.expr-btn');
-                if (!btn) return;
-                const name = btn.textContent.trim();
-                debugApplyExpression(name);
-            });
-
-            // Expose for tests
-            window._exprDebugPanel = panel;
-        })();
 
         // ===== MEMORY SYSTEM =====
         const memoryBtn = document.getElementById('memory-btn');
@@ -552,14 +487,16 @@
                 // Load expression templates included in the model folder (files named (Exp)... .exp3.json)
                 (async function loadExpressionTemplates() {
                     const exprFiles = [
+                        '(Exp)Happy.exp3.json',
                         '(Exp)Angry.exp3.json',
+                        '(Exp)Sad.exp3.json',
                         '(Exp)OOFace.exp3.json',
                         '(Exp)Sweat.exp3.json',
                         '(Exp)doya.exp3.json',
                         '(Exp)Frightened.exp3.json',
+                        '(Exp)@@.exp3.json',
                         '(Exp)Hair Change.exp3.json',
-                        '(Exp)OutFit Change.exp3.json',
-                        '(Exp)@@.exp3.json'
+                        '(Exp)OutFit Change.exp3.json'
                     ];
 
                     window.rinaExpressions = {};
@@ -589,13 +526,11 @@
         })();
 
         // Map a semantic mood string to one of the loaded expression template keys.
-        // Preferred mapping order is implemented where the mood may map to multiple
-        // possible templates (we pick the first available).
+        // Uses only (Exp) templates; happy is default/normal.
         function mapMoodToExpressionKey(mood) {
             if (!mood) return null;
             const m = (mood || '').toLowerCase().trim();
 
-            // Helper to check existence and return first available
             const pickAvailable = (candidates) => {
                 if (!window.rinaExpressions) return null;
                 for (const c of candidates) {
@@ -604,35 +539,48 @@
                 return null;
             };
 
-            // Angry group: angry, upset, disappointed, annoyed
-            if (m.includes('angry') || m.includes('upset') || m.includes('disappoint') || m.includes('annoy')) {
+            // Happy / default: happy, joyful, excited, calm, content, playful, neutral
+            if (m.includes('happy') || m.includes('joyful') || m.includes('excited') || m.includes('calm') || m.includes('content') || m.includes('playful') || m.includes('neutral')) {
+                return pickAvailable(['happy']);
+            }
+
+            // @@ : embarrassed, flustered, dizzy
+            if (m.includes('embarassed') || m.includes('flustered') || m.includes('dizzy')) {
+                return pickAvailable(['@@']);
+            }
+
+            // OO (OOFace): surprised, shocked, puzzled, confused
+            if (m.includes('suprised') || m.includes('surprised') || m.includes('shocked') || m.includes('puzzled') || m.includes('confused')) {
+                return pickAvailable(['ooface']);
+            }
+
+            // Angry: angry, upset, mad, furious
+            if (m.includes('angry') || m.includes('upset') || m.includes('mad') || m.includes('furious')) {
                 return pickAvailable(['angry']);
             }
 
-            // Surprised group: prefer '@@' expression if present, otherwise OOFace
-            if (m.includes('surprised') || m.includes('startled') || m.includes('shocked')) {
-                return pickAvailable(['@@', 'ooface']);
+            // Sad: sad, depressed
+            if (m.includes('sad') || m.includes('depressed')) {
+                return pickAvailable(['sad']);
             }
 
-            // Frightened group: frightened, scared, fear
-            if (m.includes('fright') || m.includes('scared') || m.includes('fear')) {
+            // Frightened: frightened, scared, terrified
+            if (m.includes('fright') || m.includes('scared') || m.includes('terrified')) {
                 return pickAvailable(['frightened']);
             }
 
-            // Happy / neutral group: happy, neutral, content
-            if (m.includes('happy') || m.includes('neutral') || m.includes('content') || m.includes('calm') || m.includes('playful')) {
-                return pickAvailable(['doya']);
-            }
-
-            // Nervous group: nervous, anxious, worried
-            if (m.includes('nervous') || m.includes('anxious') || m.includes('worried')) {
+            // Sweat: nervous, anxious, worried
+            if (m.includes('nerveous') || m.includes('nervous') || m.includes('anxious') || m.includes('worried') || m.includes('sweat')) {
                 return pickAvailable(['sweat']);
             }
 
-            // Fallback: attempt exact key match
+            // Doya: smug, proud
+            if (m.includes('doya') || m.includes('smug') || m.includes('proud')) {
+                return pickAvailable(['doya']);
+            }
+
             const exact = m.replace(/\s+/g, '').toLowerCase();
             if (window.rinaExpressions && window.rinaExpressions[exact]) return exact;
-
             return null;
         }
 
@@ -658,13 +606,11 @@
                                 if (p && p.Id) core.setParameterValueById(p.Id, p.Value);
                             }
                             showMoodDebug(`mood:${mood}->${mappedKey}`);
-                            // Auto-return to idle after 10 seconds
+                            // Return to happy (default) expression after 10 seconds
                             if (lastExpressionTimer) clearTimeout(lastExpressionTimer);
                             lastExpressionTimer = setTimeout(() => {
-                                console.log('[Timer] 10s mood template timeout fired, returning to idle');
-                                debugReturnToIdle();
+                                returnToHappyExpression();
                             }, 10000);
-                            console.log('[Timer] Set 10s idle reset for mood template:', mood, '->', mappedKey);
                             return;
                         } catch (e) {
                             console.debug('Failed to apply mood template', e);
@@ -676,98 +622,37 @@
             }
         }
 
-        // DEBUG helper: return model to idle/neutral state (REMOVE FOR PRODUCTION)
-        function debugReturnToIdle() {
+        // Return model to default "happy" expression using the (Exp)Happy template.
+        function returnToHappyExpression() {
             const m = window.rinaModel;
-            console.log('debugReturnToIdle called, model exists:', !!m);
-            if (!m) {
-                console.warn('Model not loaded, cannot return to idle');
-                return;
-            }
-            
+            if (!m) return;
             if (lastExpressionTimer) {
                 clearTimeout(lastExpressionTimer);
                 lastExpressionTimer = null;
             }
-            
-            // Strategy: Use expression templates for idle/neutral state
             try {
-                if (m.internalModel && m.internalModel.coreModel && typeof m.internalModel.coreModel.setParameterValueById === 'function') {
-                    const core = m.internalModel.coreModel;
-                    // Reset to neutral/default eye and mouth parameters (the initial state when model loads)
-                    core.setParameterValueById('ParamMouthOpenY', 0.25);
-                    core.setParameterValueById('ParamEyeLOpen', 0.9);
-                    core.setParameterValueById('ParamEyeROpen', 0.9);
-                    core.setParameterValueById('ParamBrowLY', 0);
-                    core.setParameterValueById('ParamBrowRY', 0);
-                    console.log('Reset to neutral/idle expression');
-                }
-            } catch (e) {
-                console.debug('Failed to reset to idle state', e);
-            }
-
-            // Also reset parameters to neutral default to ensure expression is cleared
-            try {
-                if (m.internalModel && m.internalModel.coreModel && typeof m.internalModel.coreModel.setParameterValueById === 'function') {
-                    const core = m.internalModel.coreModel;
-                    // Reset to neutral/default eye and mouth parameters
-                    core.setParameterValueById('ParamMouthOpenY', 0.25);
-                    core.setParameterValueById('ParamEyeLOpen', 0.9);
-                    core.setParameterValueById('ParamEyeROpen', 0.9);
-                    core.setParameterValueById('ParamBrowLY', 0);
-                    core.setParameterValueById('ParamBrowRY', 0);
-                    console.log('Reset neutral parameters');
-                }
-            } catch (e) {
-                console.debug('Failed to reset parameters', e);
-            }
-        }
-
-        // DEBUG helper: force an expression using only the loaded (Exp) templates
-        // (REMOVE FOR PRODUCTION) - This will NOT attempt motions or manual parameter fallbacks
-        function debugApplyExpression(name) {
-            const m = window.rinaModel;
-            if (!m) {
-                console.warn('Model not loaded yet for debugApplyExpression');
-                return;
-            }
-
-            // Clear previous timer
-            if (lastExpressionTimer) {
-                clearTimeout(lastExpressionTimer);
-            }
-
-            const key = (name || '').toLowerCase().trim();
-
-            try {
+                const key = 'happy';
                 if (window.rinaExpressions && window.rinaExpressions[key]) {
                     const params = window.rinaExpressions[key];
                     if (m.internalModel && m.internalModel.coreModel && typeof m.internalModel.coreModel.setParameterValueById === 'function') {
                         const core = m.internalModel.coreModel;
-                        try {
-                            for (const p of params) {
-                                if (p && p.Id) core.setParameterValueById(p.Id, p.Value);
-                            }
-                            showMoodDebug(`${name}`);
-                            // Auto-return to idle after 10 seconds
-                            if (lastExpressionTimer) clearTimeout(lastExpressionTimer);
-                            lastExpressionTimer = setTimeout(() => {
-                                console.log('[Timer] 10s template timeout fired, returning to idle');
-                                debugReturnToIdle();
-                            }, 10000);
-                            console.log('[Timer] Set 10s idle reset for expr template:', name);
-                            return;
-                        } catch (e) {
-                            console.debug('Failed to apply expression template', e);
+                        for (const p of params) {
+                            if (p && p.Id) core.setParameterValueById(p.Id, p.Value);
                         }
+                        return;
                     }
-                } else {
-                    console.log('No expression template for debug button:', name, '- returning to idle');
-                    // If no template exists for this label, return to idle to avoid incorrect faces
-                    debugReturnToIdle();
+                }
+                // Fallback: neutral defaults if Happy template not loaded
+                if (m.internalModel && m.internalModel.coreModel && typeof m.internalModel.coreModel.setParameterValueById === 'function') {
+                    const core = m.internalModel.coreModel;
+                    core.setParameterValueById('ParamMouthOpenY', 0.25);
+                    core.setParameterValueById('ParamEyeLOpen', 0.9);
+                    core.setParameterValueById('ParamEyeROpen', 0.9);
+                    core.setParameterValueById('ParamBrowLY', 0);
+                    core.setParameterValueById('ParamBrowRY', 0);
                 }
             } catch (e) {
-                console.debug('debugApplyExpression failed:', e);
+                console.debug('returnToHappyExpression failed', e);
             }
         }
     </script>

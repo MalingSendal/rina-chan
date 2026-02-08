@@ -317,39 +317,49 @@ def get_rina_insight(memory):
 
 def generate_mood(memory, bot_response, nsfw_mode=False):
     """Generate a simple mood/emotion tag for the latest response.
-
-    Returns one of: 'happy', 'sad', 'playful', 'flirty', 'curious', 'neutral', 'angry', 'surprised'
+    Returns one of the allowed mood tags (whitelisted).
+    Allowed moods: happy,joyful,excited,sad,depressed,upset,angry,mad,furious,
+    frightened,scared,terrified,sweat,nerveous,anxious,doya,smug,proud,
+    embarassed,flustered,dizzy,suprised,shocked,puzzled,confused
     """
     text = (bot_response or '').lower()
-    mood = 'neutral'
+    # Whitelist of allowed moods
+    allowed = {
+        'happy','joyful','excited','sad','depressed','upset','angry','mad','furious',
+        'frightened','scared','terrified','sweat','nerveous','anxious','doya','smug','proud',
+        'embarassed','flustered','dizzy','suprised','shocked','puzzled','confused'
+    }
 
-    # NSFW preference can bias toward flirty when appropriate and relationship is strong
+    # NSFW preference can bias toward an allowed excited mood when appropriate
     if nsfw_mode and memory.get('relationship_level', 0) >= 50:
-        return 'flirty'
+        return 'excited'
 
-    # Keyword heuristics
+    # Map heuristics -> allowed moods
     if any(k in text for k in ['love', '💕', '❤', 'so cute', 'adorable', 'cute', 'hee', 'hehe']):
         mood = 'happy'
     elif any(k in text for k in ['sorry', 'sowwy', 'sad', 'tears', '😭']):
         mood = 'sad'
     elif any(k in text for k in ['haha', 'lol', 'fun', 'play', 'tease', 'mischiev']):
-        mood = 'playful'
+        mood = 'joyful'
     elif any(k in text for k in ['wow', 'ah', 'oh', 'surpris']):
-        mood = 'surprised'
-    elif any(k in text for k in ['why', 'how', '?']):
-        mood = 'curious'
+        mood = 'suprised'
+    elif any(k in text for k in ['why', 'how']) or text.strip().endswith('?'):
+        mood = 'puzzled'
     elif any(k in text for k in ['angry', 'hate', 'no way', 'hmph', 'hmphh']):
         mood = 'angry'
     else:
-        # Use relationship level to bias mood
+        # Use relationship level to bias mood into allowed list
         rl = memory.get('relationship_level', 0)
         if rl >= 80:
-            mood = 'happy'
+            mood = 'joyful'
         elif rl >= 50:
-            mood = 'playful'
+            mood = 'excited'
         else:
-            mood = 'neutral'
+            mood = 'happy'
 
+    # Safety: ensure returned mood is in allowed list; fallback to 'happy'
+    if mood not in allowed:
+        return 'happy'
     return mood
 
 def save_chat_history(user_message, bot_response, nsfw_mode=False):
