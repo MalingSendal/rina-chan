@@ -90,52 +90,6 @@
             }
         });
 
-        async function sendMessage() {
-            const message = chatInput.value.trim();
-            if (!message) return;
-
-            chatInput.value = '';
-            addUserMessage(message);
-            isWaitingForResponse = true;
-            sendBtn.disabled = true;
-
-            showTypingIndicator();
-
-            try {
-                const response = await fetch(`/chat`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        message: message,
-                        nsfw_mode: nsfwMode
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error(`API error: ${response.status}`);
-                }
-
-                const data = await response.json();
-                removeTypingIndicator();
-                addBotMessage(data.response);
-                // Apply unseen mood to Live2D model (mood is not displayed in chat)
-                if (data.mood) {
-                    try { applyMoodToModel(data.mood); } catch (e) { console.debug('Mood apply failed', e); }
-                    try { showMoodDebug(data.mood); } catch (e) { /* ignore if debug API missing */ }
-                }
-            } catch (error) {
-                console.error('Chat error:', error);
-                removeTypingIndicator();
-                addBotMessage("Hmph... Something went wrong. Try again, will you?");
-            } finally {
-                isWaitingForResponse = false;
-                sendBtn.disabled = false;
-                chatInput.focus();
-            }
-        }
-
         function addUserMessage(text) {
             const messageEl = document.createElement('div');
             messageEl.className = 'message user';
@@ -255,6 +209,7 @@
         });
 
         let lastExpressionTimer = null;
+        let currentExpression = 'neutral'; // Default is now neutral
 
         // ===== MEMORY SYSTEM =====
         const memoryBtn = document.getElementById('memory-btn');
@@ -483,6 +438,12 @@
                 console.log('Model loaded successfully – fully local!');
                 // Expose model globally so other UI code can control expressions
                 window.rinaModel = model;
+                currentExpression = 'neutral'; // Set initial expression to neutral
+
+                // Apply neutral expression immediately on load
+                setTimeout(() => {
+                    returnToNeutralExpression();
+                }, 1000);
 
                 // Load expression templates included in the model folder (files named (Exp)... .exp3.json)
                 (async function loadExpressionTemplates() {
@@ -496,7 +457,8 @@
                         '(Exp)Frightened.exp3.json',
                         '(Exp)@@.exp3.json',
                         '(Exp)Hair Change.exp3.json',
-                        '(Exp)OutFit Change.exp3.json'
+                        '(Exp)OutFit Change.exp3.json',
+                        '(Exp)Neutral.exp3.json'   // ← Neutral expression added
                     ];
 
                     window.rinaExpressions = {};
@@ -526,9 +488,9 @@
         })();
 
         // Map a semantic mood string to one of the loaded expression template keys.
-        // Uses only (Exp) templates; happy is default/normal.
+        // Uses only (Exp) templates; neutral is default/normal.
         function mapMoodToExpressionKey(mood) {
-            if (!mood) return null;
+            if (!mood) return 'neutral';
             const m = (mood || '').toLowerCase().trim();
 
             const pickAvailable = (candidates) => {
@@ -539,8 +501,12 @@
                 return null;
             };
 
-            // Happy / default: happy, joyful, excited, calm, content, playful, neutral
-            if (m.includes('happy') || m.includes('joyful') || m.includes('excited') || m.includes('calm') || m.includes('content') || m.includes('playful') || m.includes('neutral')) {
+            // Neutral (explicit or fallback)
+            if (m === 'neutral' || m === '') return pickAvailable(['neutral']);
+
+            // Happy (now exclusive to "happy" mood)
+            if (m.includes('happy') || m.includes('joyful') || m.includes('excited') || 
+                m.includes('calm') || m.includes('content') || m.includes('playful')) {
                 return pickAvailable(['happy']);
             }
 
@@ -550,7 +516,8 @@
             }
 
             // OO (OOFace): surprised, shocked, puzzled, confused
-            if (m.includes('suprised') || m.includes('surprised') || m.includes('shocked') || m.includes('puzzled') || m.includes('confused')) {
+            if (m.includes('suprised') || m.includes('surprised') || m.includes('shocked') || 
+                m.includes('puzzled') || m.includes('confused')) {
                 return pickAvailable(['ooface']);
             }
 
@@ -570,7 +537,8 @@
             }
 
             // Sweat: nervous, anxious, worried
-            if (m.includes('nerveous') || m.includes('nervous') || m.includes('anxious') || m.includes('worried') || m.includes('sweat')) {
+            if (m.includes('nerveous') || m.includes('nervous') || m.includes('anxious') || 
+                m.includes('worried') || m.includes('sweat')) {
                 return pickAvailable(['sweat']);
             }
 
@@ -581,7 +549,40 @@
 
             const exact = m.replace(/\s+/g, '').toLowerCase();
             if (window.rinaExpressions && window.rinaExpressions[exact]) return exact;
-            return null;
+
+            return pickAvailable(['neutral']);
+        }
+
+        // Helper function to apply a specific expression template
+        function applyExpressionTemplate(expressionKey) {
+            const m = window.rinaModel;
+            if (!m || !window.rinaExpressions || !window.rinaExpressions[expressionKey]) return;
+
+            try {
+                const params = window.rinaExpressions[expressionKey];
+                if (m.internalModel && m.internalModel.coreModel && typeof m.internalModel.coreModel.setParameterValueById === 'function') {
+                    const core = m.internalModel.coreModel;
+                    for (const p of params) {
+                        if (p && p.Id) core.setParameterValueById(p.Id, p.Value);
+                    }
+                    console.log(`Applied expression: ${expressionKey}`);
+                }
+            } catch (e) {
+                console.debug('Failed to apply expression template', e);
+            }
+        }
+
+        // Return model to default "neutral" expression using the (Exp)Neutral template.
+        function returnToNeutralExpression() {
+            if (lastExpressionTimer) {
+                clearTimeout(lastExpressionTimer);
+                lastExpressionTimer = null;
+            }
+            
+            if (currentExpression !== 'neutral') {
+                applyExpressionTemplate('neutral');
+                currentExpression = 'neutral';
+            }
         }
 
         // Apply a mood to the Live2D model using only the loaded (Exp) templates.
@@ -590,69 +591,94 @@
         function applyMoodToModel(mood) {
             const m = window.rinaModel;
             if (!m) return;
+
             try {
                 const mappedKey = mapMoodToExpressionKey(mood);
-                if (!mappedKey) {
-                    console.log('No mapped expression key for mood:', mood);
+                if (!mappedKey || !window.rinaExpressions[mappedKey]) {
+                    console.log('No expression template for mood:', mood);
                     return;
                 }
 
-                if (window.rinaExpressions && window.rinaExpressions[mappedKey]) {
-                    const params = window.rinaExpressions[mappedKey];
-                    if (m.internalModel && m.internalModel.coreModel && typeof m.internalModel.coreModel.setParameterValueById === 'function') {
-                        const core = m.internalModel.coreModel;
-                        try {
-                            for (const p of params) {
-                                if (p && p.Id) core.setParameterValueById(p.Id, p.Value);
-                            }
-                            showMoodDebug(`mood:${mood}->${mappedKey}`);
-                            // Return to happy (default) expression after 10 seconds
-                            if (lastExpressionTimer) clearTimeout(lastExpressionTimer);
-                            lastExpressionTimer = setTimeout(() => {
-                                returnToHappyExpression();
-                            }, 10000);
-                            return;
-                        } catch (e) {
-                            console.debug('Failed to apply mood template', e);
-                        }
-                    }
+                // If we're already showing this expression, don't reapply it
+                if (currentExpression === mappedKey) return;
+
+                // Clear any existing timer
+                if (lastExpressionTimer) {
+                    clearTimeout(lastExpressionTimer);
+                    lastExpressionTimer = null;
+                }
+
+                // Reset to neutral first if we're changing from a non-neutral expression
+                if (currentExpression !== 'neutral' && mappedKey !== 'neutral') {
+                    applyExpressionTemplate('neutral');
+                }
+
+                // Apply the new expression
+                applyExpressionTemplate(mappedKey);
+                currentExpression = mappedKey;
+
+                showMoodDebug(`mood:${mood}->${mappedKey}`);
+
+                // Set timer to return to neutral after 10 seconds (unless it's already neutral)
+                if (mappedKey !== 'neutral') {
+                    lastExpressionTimer = setTimeout(() => {
+                        applyExpressionTemplate('neutral');
+                        currentExpression = 'neutral';
+                        lastExpressionTimer = null;
+                    }, 10000);
                 }
             } catch (err) {
                 console.debug('applyMoodToModel failed:', err);
             }
         }
 
-        // Return model to default "happy" expression using the (Exp)Happy template.
-        function returnToHappyExpression() {
-            const m = window.rinaModel;
-            if (!m) return;
-            if (lastExpressionTimer) {
-                clearTimeout(lastExpressionTimer);
-                lastExpressionTimer = null;
-            }
+        // Send message function – now resets to neutral on user input
+        async function sendMessage() {
+            const message = chatInput.value.trim();
+            if (!message) return;
+
+            chatInput.value = '';
+            addUserMessage(message);
+            isWaitingForResponse = true;
+            sendBtn.disabled = true;
+
+            // Reset model to neutral expression immediately when user sends a message
+            returnToNeutralExpression();
+
+            showTypingIndicator();
+
             try {
-                const key = 'happy';
-                if (window.rinaExpressions && window.rinaExpressions[key]) {
-                    const params = window.rinaExpressions[key];
-                    if (m.internalModel && m.internalModel.coreModel && typeof m.internalModel.coreModel.setParameterValueById === 'function') {
-                        const core = m.internalModel.coreModel;
-                        for (const p of params) {
-                            if (p && p.Id) core.setParameterValueById(p.Id, p.Value);
-                        }
-                        return;
-                    }
+                const response = await fetch(`/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        nsfw_mode: nsfwMode
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
                 }
-                // Fallback: neutral defaults if Happy template not loaded
-                if (m.internalModel && m.internalModel.coreModel && typeof m.internalModel.coreModel.setParameterValueById === 'function') {
-                    const core = m.internalModel.coreModel;
-                    core.setParameterValueById('ParamMouthOpenY', 0.25);
-                    core.setParameterValueById('ParamEyeLOpen', 0.9);
-                    core.setParameterValueById('ParamEyeROpen', 0.9);
-                    core.setParameterValueById('ParamBrowLY', 0);
-                    core.setParameterValueById('ParamBrowRY', 0);
+
+                const data = await response.json();
+                removeTypingIndicator();
+                addBotMessage(data.response);
+                // Apply unseen mood to Live2D model (mood is not displayed in chat)
+                if (data.mood) {
+                    try { applyMoodToModel(data.mood); } catch (e) { console.debug('Mood apply failed', e); }
+                    try { showMoodDebug(data.mood); } catch (e) { /* ignore if debug API missing */ }
                 }
-            } catch (e) {
-                console.debug('returnToHappyExpression failed', e);
+            } catch (error) {
+                console.error('Chat error:', error);
+                removeTypingIndicator();
+                addBotMessage("Hmph... Something went wrong. Try again, will you?");
+            } finally {
+                isWaitingForResponse = false;
+                sendBtn.disabled = false;
+                chatInput.focus();
             }
         }
     </script>

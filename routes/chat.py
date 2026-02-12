@@ -92,8 +92,6 @@ Conversation history: {memory['conversation_count']} conversations
             'frightened','scared','terrified','sweat','nerveous','anxious','doya','smug','proud',
             'embarassed','flustered','dizzy','suprised','shocked','puzzled','confused'
         }
-        if mood not in allowed_moods:
-            mood = 'happy'
 
         # Store in memory and history
         chat_history.append({'role': 'user', 'content': user_message})
