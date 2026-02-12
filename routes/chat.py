@@ -90,7 +90,7 @@ Conversation history: {memory['conversation_count']} conversations
         allowed_moods = {
             'happy','joyful','excited','sad','depressed','upset','angry','mad','furious',
             'frightened','scared','terrified','sweat','nerveous','anxious','doya','smug','proud',
-            'embarassed','flustered','dizzy','suprised','shocked','puzzled','confused'
+            'embarassed','flustered','dizzy','suprised','shocked','puzzled','confused','horny'
         }
 
         # Store in memory and history

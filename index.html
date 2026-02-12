@@ -504,14 +504,14 @@
             // Neutral (explicit or fallback)
             if (m === 'neutral' || m === '') return pickAvailable(['neutral']);
 
-            // Happy (now exclusive to "happy" mood)
+            // Happy : happy, joyful, excited, calm, content, playful
             if (m.includes('happy') || m.includes('joyful') || m.includes('excited') || 
                 m.includes('calm') || m.includes('content') || m.includes('playful')) {
                 return pickAvailable(['happy']);
             }
 
-            // @@ : embarrassed, flustered, dizzy
-            if (m.includes('embarassed') || m.includes('flustered') || m.includes('dizzy')) {
+            // @@ : embarrassed, flustered, dizzy, horny
+            if (m.includes('embarassed') || m.includes('flustered') || m.includes('dizzy') || m.includes('horny')) {
                 return pickAvailable(['@@']);
             }
 

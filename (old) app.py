@@ -97,7 +97,7 @@ def chat():
         )
 
         if response.status_code != 200:
-            return jsonify({'response': '*sighs* The connection broke... try again? 💔'}), 500
+            return jsonify({'response': '*sighs* The connection broke... try again?'}), 500
 
         response_text = response.json().get('response', 'Hmm? Did you say something?').strip()
 
@@ -117,10 +117,10 @@ def chat():
             'response': 'Hmph... I can\'t reach my brain right now. Make sure Ollama is running at {}:{} 💢'.format(OLLAMA_IP, OLLAMA_PORT)
         }), 500
     except requests.exceptions.Timeout:
-        return jsonify({'response': 'This is taking too long... try a simpler question? 😤'}), 500
+        return jsonify({'response': 'This is taking too long... try a simpler question?'}), 500
     except Exception as e:
         print(f'Error: {e}')
-        return jsonify({'response': 'Something went wrong... sowwy 😭'}), 500
+        return jsonify({'response': 'Something went wrong... sowwy'}), 500
 
 
 @app.route('/config', methods=['GET'])
@@ -174,11 +174,7 @@ def format_prompt(messages):
 
 
 if __name__ == '__main__':
-    print(f"""
-    ╔══════════════════════════════════════╗
-    ║   Rina-chan AI Companion Backend     ║
-    ╚══════════════════════════════════════╝
-    
+    print(f"""    
     Configuration:
     - Ollama IP: {OLLAMA_IP}
     - Ollama Port: {OLLAMA_PORT}
