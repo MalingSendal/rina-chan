@@ -12,6 +12,9 @@
     <!-- Fullscreen Button -->
     <button id="fullscreen-btn" aria-label="Toggle fullscreen">⛶</button>
 
+    <!-- Background Toggle Button -->
+    <button id="bg-toggle-btn" title="Toggle Night Mode">🌙</button>
+
     <!-- Chat Container -->
     <div id="chat-container">
         <div id="chat-header">
@@ -349,6 +352,25 @@
         // Update button text when fullscreen state changes
         document.addEventListener('fullscreenchange', () => {
             fullscreenBtn.textContent = document.fullscreenElement ? '⛶' : '⛶';
+        });
+
+        // ===== BACKGROUND TOGGLE BUTTON =====
+        const bgToggleBtn = document.getElementById('bg-toggle-btn');
+        const body = document.body;
+
+        let nightMode = localStorage.getItem('nightMode') === 'true';
+
+        function applyNightMode() {
+            body.classList.toggle('night-mode', nightMode);
+            bgToggleBtn.textContent = nightMode ? '☀️' : '🌙';
+        }
+
+        applyNightMode();
+
+        bgToggleBtn.addEventListener('click', () => {
+            nightMode = !nightMode;
+            localStorage.setItem('nightMode', nightMode);
+            applyNightMode();
         });
 
         // ===== LIVE2D SYSTEM =====
