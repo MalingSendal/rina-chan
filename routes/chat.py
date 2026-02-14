@@ -30,13 +30,15 @@ def chat():
     try:
         # Load user memory
         memory = load_memory()
+        
+        # update memory with this conversation 
+        update_memory_with_conversation(memory, user_message, "") 
+
         memory_summary = get_memory_summary(memory)
         rina_insight = get_rina_insight(memory)
         
-        # Select personality based on NSFW mode
         system_prompt = SYSTEM_PROMPT_NSFW if nsfw_mode else SYSTEM_PROMPT
         
-        # Build personalized system prompt with memory and growth
         system_prompt_with_memory = f"""{system_prompt}
 
 === YOUR KNOWLEDGE OF REN ===
@@ -51,22 +53,17 @@ Conversation history: {memory['conversation_count']} conversations
 {f"Communication style you've noticed: {memory['user_personality_profile'].get('communication_style', 'developing')}" if memory['user_personality_profile'] else ""}
 """
         
-        # Build Ollama API URL
         ollama_api_url = f'http://{app.config["OLLAMA_IP"]}:{app.config["OLLAMA_PORT"]}/api/generate'
         
-        # Build conversation context
         messages = [
             {'role': 'system', 'content': system_prompt_with_memory}
         ]
         
-        # Add recent chat history (last 5 exchanges)
         for msg in chat_history[-10:]:
             messages.append(msg)
         
-        # Add current user message
         messages.append({'role': 'user', 'content': user_message})
 
-        # Call Ollama API
         response = requests.post(
             ollama_api_url,
             json={
@@ -83,30 +80,31 @@ Conversation history: {memory['conversation_count']} conversations
 
         response_text = response.json().get('response', 'Hmm? Did you say something?').strip()
 
-        # Generate mood tag for this response (not shown in chat text)
+        # Now update memory with the full conversation (including bot response)
+        update_memory_with_conversation(memory, user_message, response_text)
+
+        # Generate mood tag for this response (using updated memory)
         mood = generate_mood(memory, response_text, nsfw_mode)
 
         # Enforce allowed mood whitelist before returning (safety)
         allowed_moods = {
             'happy','joyful','excited','sad','depressed','upset','angry','mad','furious',
             'frightened','scared','terrified','sweat','nerveous','anxious','doya','smug','proud',
-            'embarassed','flustered','dizzy','suprised','shocked','puzzled','confused','horny'
+            'embarassed','flustered','dizzy','suprised','shocked','puzzled','confused','resentful','bitter'
         }
 
-        # Store in memory and history
         chat_history.append({'role': 'user', 'content': user_message})
         chat_history.append({'role': 'assistant', 'content': response_text})
         
-        # Update long-term memory (this will also analyze personality and update relationship)
-        update_memory_with_conversation(memory, user_message, response_text)
-        
-        # Save chat history to file
         save_chat_history(user_message, response_text, nsfw_mode)
 
-        # Keep in-memory history manageable (max 50 messages)
         if len(chat_history) > 50:
             chat_history.pop(0)
             chat_history.pop(0)
+
+        # Ensure mood is allowed
+        if mood not in allowed_moods:
+            mood = 'happy'
 
         return jsonify({'response': response_text, 'mood': mood})
 

@@ -26,7 +26,6 @@ def update_memory():
         data = request.get_json()
         memory = load_memory()
         
-        # Update specific fields
         if 'user_name' in data:
             memory['user_name'] = data['user_name']
         if 'personality_traits' in data:
@@ -72,7 +71,7 @@ def get_history():
         return jsonify({
             'success': True,
             'total_messages': len(history),
-            'history': history[-100:]  # Return last 100 messages
+            'history': history[-100:]
         })
     except Exception as e:
         return jsonify({
@@ -87,16 +86,22 @@ def get_stats():
         memory = load_memory()
         history = get_chat_history()
         
-        # Determine relationship stage
         rel_level = memory['relationship_level']
-        if rel_level < 20:
-            relationship_stage = "🌱 Just Getting Started"
-        elif rel_level < 50:
-            relationship_stage = "💚 Building Friendship"
-        elif rel_level < 80:
-            relationship_stage = "💕 Close Companions"
-        else:
+        # Determine relationship stage (now includes negative)
+        if rel_level >= 80:
             relationship_stage = "💗 Deeply Connected"
+        elif rel_level >= 50:
+            relationship_stage = "💕 Close Companions"
+        elif rel_level >= 20:
+            relationship_stage = "💚 Building Friendship"
+        elif rel_level >= 0:
+            relationship_stage = "🌱 Just Getting Started"
+        elif rel_level > -30:
+            relationship_stage = "😕 Slightly Strained"
+        elif rel_level > -60:
+            relationship_stage = "😤 Resentful"
+        else:
+            relationship_stage = "💔 Hostile"
         
         stats = {
             'user_name': memory['user_name'],
@@ -105,6 +110,8 @@ def get_stats():
             'learned_facts_count': len(memory['learned_facts']),
             'interests_count': len(memory['interests']),
             'preferences_count': len(memory['preferences']),
+            'positive_interactions': memory.get('positive_interactions', 0),
+            'negative_interactions': memory.get('negative_interactions', 0),
             'first_conversation': memory['created_at'],
             'last_conversation': memory['last_conversation'],
             'relationship_level': rel_level,
