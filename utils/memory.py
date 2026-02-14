@@ -7,7 +7,7 @@ HISTORY_DIR = 'data/chat_history'
 
 # Simple sentiment lexicon
 POSITIVE_WORDS = {'love', 'like', 'good', 'great', 'awesome', 'amazing', 'happy', 'glad', 'thank', 'thanks', 'appreciate', 'sweet', 'cute', 'adorable', 'fun', 'best', 'perfect', 'nice', 'cool', 'fantastic', 'wonderful', 'pleased', 'enjoy', 'cherish', 'adore', 'precious', 'darling', 'miss', 'care', 'trust', 'kind', 'gentle', 'hug', 'kiss'}
-NEGATIVE_WORDS = {'hate', 'bad', 'terrible', 'awful', 'stupid', 'dumb', 'annoying', 'frustrating', 'angry', 'mad', 'upset', 'sad', 'disappointed', 'dislike', 'horrible', 'worst', 'rude', 'mean', 'cruel', 'evil', 'vile', 'despise', 'loathe', 'contempt', 'scorn', 'betray', 'hurt', 'pain', 'suffer', 'pathetic', 'useless', 'worthless', 'shut up', 'stop', 'leave', 'go away', 'ignore'}
+NEGATIVE_WORDS = {'hate', 'terrible', 'awful', 'stupid', 'dumb', 'annoying', 'frustrating', 'angry', 'mad', 'upset', 'sad', 'disappointed', 'dislike', 'horrible', 'worst', 'rude', 'mean', 'cruel', 'evil', 'vile', 'despise', 'loathe', 'contempt', 'scorn', 'betray', 'hurt', 'pain', 'suffer', 'pathetic', 'useless', 'worthless', 'shut up', 'stop', 'leave', 'go away', 'ignore'}
 
 def ensure_data_dirs():
     """Create necessary directories"""
@@ -129,7 +129,7 @@ def analyze_user_personality(memory):
     # Emotional tone analysis
     user_messages = ' '.join([msg['user_said'].lower() for msg in recent_messages])
     
-    if any(emoji in user_messages for emoji in ['❤', '💕', '😊', '🥰', ':)']):
+    if any(emoji in user_messages for emoji in ['❤', '💕', '😊', '🥰', ':)',':D']):
         profile['emotional_tone'] = 'warm'
         profile['traits'].append('affectionate')
     
@@ -137,7 +137,7 @@ def analyze_user_personality(memory):
         profile['traits'].append('curious')
         profile['values'].append('learning')
     
-    if any(word in user_messages for word in ['fun', 'laugh', 'haha', 'lol', '😂']):
+    if any(word in user_messages for word in ['fun', 'laugh', 'ahaha', 'lol', '😂']):
         profile['traits'].append('humorous')
         profile['communication_style'] = 'playful'
     
@@ -145,8 +145,11 @@ def analyze_user_personality(memory):
         profile['traits'].append('polite')
         profile['values'].append('respect')
     
-    if any(word in user_messages for word in ['love', 'passion', 'favorite']):
+    if any(word in user_messages for word in ['love', 'passion', 'favorite','adore','kiss','hug']):
         profile['traits'].append('passionate')
+    
+    if any(word in user_messages for word in ['fuck', 'sex', 'horny', 'naked', 'dick', 'cock', 'pussy']):
+        profile['traits'].append('horny')
     
     # Engagement level
     if memory['conversation_count'] > 20:
