@@ -1,4 +1,4 @@
-# Rina-chan AI Companion 💕
+# Rina-chan AI Companion
 
 A beautiful web-based AI companion featuring Live2D animation and personality-driven chat powered by Ollama.
 
@@ -15,7 +15,7 @@ A beautiful web-based AI companion featuring Live2D animation and personality-dr
 
 - **Ollama** installed and running (download from [ollama.ai](https://ollama.ai))
 - **Python 3.8+** installed
-- **A Llama model** pulled in Ollama (e.g., `ollama pull mistral`)
+- **A Llama model** pulled in Ollama (e.g., `ollama pull llama3.2:3b`)
 
 ## Setup Instructions
 
@@ -30,10 +30,10 @@ pip install -r requirements.txt
 Edit `.env` file with your Ollama settings:
 
 ```env
-OLLAMA_IP=192.168.100.10        # Your Ollama server IP
+OLLAMA_IP=192.168.100.XX       # Your Ollama server IP
 OLLAMA_PORT=11434              # Ollama API port (default 11434)
-OLLAMA_MODEL=mistral           # Model name to use
-CHARACTER_NAME=Rina-chan       # Character name
+OLLAMA_MODEL=llama3.2:3b       # Model name to use
+CHARACTER_NAME=Rina-chan       # Default Character name
 ```
 
 ### 3. Start Ollama
@@ -59,15 +59,16 @@ You should see:
 ╚══════════════════════════════════════╝
 
 Configuration:
-- Ollama IP: 192.168.100.10
+- Ollama IP: 192.168.XXX.XX
 - Ollama Port: 11434
 - Model: mistral
 - Character: Rina-chan
 
-Starting server on http://localhost:5000
+Starting server on http://APP_IP:5000
 ✓ Ollama is reachable! Available models:
   - mistral
   - neural-chat
+  - llama3.2:3b
   ...
 ```
 
@@ -89,7 +90,7 @@ Then navigate to `http://localhost:8000` (or your server URL)
 
 1. **Type your message** in the chat input at the bottom
 2. **Press Enter or click Send** to send your message
-3. **Toggle NSFW** with the slider in the chat header for flirty mode
+3. **Toggle NSFW** with the slider in the chat header for flirty / cruel mode
 4. **The model will respond** with Rina-chan's personality
 
 ## Configuration
@@ -105,7 +106,7 @@ OLLAMA_MODEL=neural-chat  # or any other pulled model
 
 If using a remote Ollama server:
 ```env
-OLLAMA_IP=192.168.100.10  # Your remote IP
+OLLAMA_IP=192.168.XXX.XX  # Your remote IP
 ```
 
 ### Customize Personality
@@ -117,7 +118,7 @@ Edit the `SYSTEM_PROMPT` and `SYSTEM_PROMPT_NSFW` in `app.py` to modify her pers
 ### "Cannot reach Ollama"
 - Check that Ollama is running
 - Verify the IP and port are correct
-- Test with: `curl http://192.168.100.10:11434/api/tags`
+- Test with: `curl http://192.168.XXX.XX:11434/api/tags`
 
 ### Chat not responding
 - Check the browser console (F12) for errors
@@ -170,14 +171,9 @@ rina-chan/
 
 ## Tips
 
-- Use shorter models like `mistral` or `neural-chat` for faster responses
+- Use shorter models like `llama3.2:3b` or `mistral` for faster responses
 - Adjust temperature in `app.py` for more/less random responses
 - Keep chat history for better context (up to 50 messages stored)
-- The model will use emoji and Japanese expressions automatically
-
-## License
-
-Created with ❤️ for AI companions.
 
 ## Support
 
