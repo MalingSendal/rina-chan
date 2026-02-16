@@ -13,6 +13,10 @@ MEMORY_GUIDE.md
 Dockerfile  
 docker-compose.yml
 rina-chan.yaml
+<<<<<<< HEAD
 (old) app.py
 start.bat
 start.sh
+=======
+(old) app.py
+>>>>>>> e3486cbdd4f8c98be26873f6914c9e3106c7d2f7
