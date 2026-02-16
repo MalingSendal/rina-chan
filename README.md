@@ -7,9 +7,9 @@ A web-based AI companion featuring Live2D animation and personality-driven chat 
 ✨ **Live2D Animation** - Beautiful animated character model
 💬 **Personality Chat** - Innocent, bratty, and engaging personality
 🔒 **NSFW Toggle** - Switch between normal and flirty modes with a slider
-🎨 **Beautiful UI** - Modern chat interface with smooth animations
+🎨 **Simplistic UI** - Modern chat interface with smooth animations
 ⚙️ **Easy Configuration** - IP and model settings in `.env` file
-🚀 **Ollama Integration** - Uses local Ollama LLM for fast, private responses
+🚀 **Ollama Integration** - Uses local Ollama LLM for localized, and private responses
 
 ## Prerequisites
 
