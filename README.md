@@ -16,6 +16,7 @@ A web-based AI companion featuring Live2D animation and personality-driven chat 
 - **Ollama** installed and running (download from [ollama.ai](https://ollama.ai))
 - **Python 3.8+** installed
 - **A Llama model** pulled in Ollama (e.g., `ollama pull llama3.2:3b`)
+- In Ollama make sure to turn on its "Expose Ollama to the network" settings
 
 ## Setup Instructions
 
@@ -33,7 +34,8 @@ Edit `.env` file with your Ollama settings:
 OLLAMA_IP=192.168.100.XX       # Your Ollama server IP
 OLLAMA_PORT=11434              # Ollama API port (default 11434)
 OLLAMA_MODEL=llama3.2:3b       # Model name to use
-CHARACTER_NAME=Rina-chan       # Default Character name
+CHARACTER_NAME=Rina-chan       # Default Character name (no need to change this)
+USER=Ren                       # Change this if you want her to refer to your name
 ```
 
 ### 3. Start Ollama
@@ -63,6 +65,7 @@ Configuration:
 - Ollama Port: 11434
 - Model: mistral
 - Character: Rina-chan
+- User Name : Ren
 
 Starting server on http://APP_IP:5000
 ✓ Ollama is reachable! Available models:
