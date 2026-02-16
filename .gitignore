@@ -5,6 +5,11 @@ data/
 __pycache__/
 routes/__pycache__/
 utils/__pycache__/
+myenv/
 MEMORY_GUIDE.md
 DOCUMENTATION.md
 MEMORY_GUIDE.md
+.dockerignore
+Dockerfile  
+docker-compose.yml
+rina-chan.yaml

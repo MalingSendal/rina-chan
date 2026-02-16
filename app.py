@@ -42,4 +42,5 @@ if __name__ == '__main__':
     print_startup_info(app)
     check_ollama_connection(app)
     
-    app.run(debug=True, host=app.config['APP_IP'], port=5000)
+    debug = os.getenv('FLASK_DEBUG', 'true').lower() in ('1', 'true', 'yes')
+    app.run(debug=debug, host=app.config['APP_IP'], port=5000)
