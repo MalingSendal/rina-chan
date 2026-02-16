@@ -1,6 +1,6 @@
 # Rina-chan AI Companion
 
-A beautiful web-based AI companion featuring Live2D animation and personality-driven chat powered by Ollama.
+A web-based AI companion featuring Live2D animation and personality-driven chat powered by Ollama.
 
 ## Features
 
