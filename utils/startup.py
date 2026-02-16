@@ -12,6 +12,7 @@ def print_startup_info(app):
     - Ollama Port: {app.config['OLLAMA_PORT']}
     - Model: {app.config['OLLAMA_MODEL']}
     - Character: {app.config['CHARACTER_NAME']}
+    - User Name: {app.config['USER']}
     
     Starting server on http://{app.config['APP_IP']}:5000
     """)

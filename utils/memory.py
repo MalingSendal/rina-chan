@@ -1,6 +1,9 @@
 import json
 import os
 from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
 
 MEMORY_FILE = 'data/user_memory.json'
 HISTORY_DIR = 'data/chat_history'
@@ -13,6 +16,10 @@ def ensure_data_dirs():
     """Create necessary directories"""
     os.makedirs('data', exist_ok=True)
     os.makedirs(HISTORY_DIR, exist_ok=True)
+
+def get_user_name_from_env():
+    """Get user name from environment variable, with fallback"""
+    return os.getenv('USER', 'Ren')  # 'Ren' is the default
 
 def load_memory():
     """Load user memory from file"""
@@ -36,7 +43,7 @@ def load_memory():
 def create_default_memory():
     """Create default memory structure"""
     return {
-        'user_name': 'Ren',
+        'user_name': get_user_name_from_env(),
         'personality_traits': [],
         'preferences': [],
         'interests': [],
@@ -220,11 +227,11 @@ def generate_conclusions(memory):
     
     if profile['traits']:
         main_traits = ', '.join(profile['traits'][:3])
-        conclusions['personality'] = f"Ren is very {main_traits}"
+        conclusions['personality'] = f"{get_user_name_from_env()} is very {main_traits}"
     
     if memory['interests']:
         if len(memory['interests']) > 0:
-            conclusions['interests_summary'] = f"Ren is passionate about {len(memory['interests'])} different things"
+            conclusions['interests_summary'] = f"{get_user_name_from_env()} is passionate about {len(memory['interests'])} different things"
     
     # Relationship-based conclusions
     rel = memory['relationship_level']
@@ -238,7 +245,7 @@ def generate_conclusions(memory):
         conclusions['distance'] = f"I'm deeply resentful. You've said things that cut deep."
     
     if memory['conversation_count'] > 20:
-        conclusions['bond'] = f"I feel like we have a special connection now, Ren ♡"
+        conclusions['bond'] = f"I feel like we have a special connection now, {get_user_name_from_env()} ♡"
     
     if profile['emotional_tone'] == 'warm':
         conclusions['emotional_connection'] = "You have a warm, kind way of interacting that makes me happy"

@@ -18,6 +18,7 @@ def create_app():
         OLLAMA_MODEL=os.getenv('OLLAMA_MODEL'),
         CHARACTER_NAME=os.getenv('CHARACTER_NAME'),
         APP_IP=os.getenv('APP_IP'),
+        USER=os.getenv('USER'),
         SECRET_KEY=os.getenv('SECRET_KEY', 'dev-key-change-me')
     )
     

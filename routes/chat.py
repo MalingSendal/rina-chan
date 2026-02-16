@@ -41,11 +41,11 @@ def chat():
         
         system_prompt_with_memory = f"""{system_prompt}
 
-=== YOUR KNOWLEDGE OF REN ===
+=== YOUR KNOWLEDGE OF USER ===
 {memory_summary}
 
 === YOUR PERSONAL FEELINGS ===
-{rina_insight if rina_insight else "You're just starting to get to know Ren, and you're excited to learn more about them."}
+{rina_insight if rina_insight else "You're just starting to get to know user, and you're excited to learn more about them."}
 
 === RELATIONSHIP STAGE ===
 Relationship intimacy level: {memory['relationship_level']}/100
