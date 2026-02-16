@@ -13,3 +13,4 @@ MEMORY_GUIDE.md
 Dockerfile  
 docker-compose.yml
 rina-chan.yaml
+(old)app.py
