@@ -13,6 +13,7 @@ def print_startup_info(app):
     - Model: {app.config['OLLAMA_MODEL']}
     - Character: {app.config['CHARACTER_NAME']}
     - User Name: {app.config['USER']}
+    - Context Length: {app.config.get('OLLAMA_NUM_CTX')}
     
     Starting server on http://{app.config['APP_IP']}:5000
     """)

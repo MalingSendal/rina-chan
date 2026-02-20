@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 from utils.memory import load_memory, save_memory, clear_memory, get_chat_history
 
 memory_bp = Blueprint('memory', __name__, url_prefix='/memory')
@@ -7,7 +7,8 @@ memory_bp = Blueprint('memory', __name__, url_prefix='/memory')
 def get_memory():
     """Get current user memory"""
     try:
-        memory = load_memory()
+        user_id = request.args.get('user_id', None)
+        memory = load_memory(user_id=user_id)
         return jsonify({
             'success': True,
             'memory': memory
@@ -22,9 +23,9 @@ def get_memory():
 def update_memory():
     """Manually update memory (admin function)"""
     try:
-        from flask import request
-        data = request.get_json()
-        memory = load_memory()
+        data = request.get_json() or {}
+        user_id = data.get('user_id', None)
+        memory = load_memory(user_id=user_id)
         
         if 'user_name' in data:
             memory['user_name'] = data['user_name']
@@ -33,7 +34,7 @@ def update_memory():
         if 'preferences' in data:
             memory['preferences'] = data['preferences']
         
-        save_memory(memory)
+        save_memory(memory, user_id=user_id)
         return jsonify({
             'success': True,
             'memory': memory
@@ -48,7 +49,9 @@ def update_memory():
 def clear():
     """Clear all memory (admin function)"""
     try:
-        memory = clear_memory()
+        data = request.get_json() or {}
+        user_id = data.get('user_id', None)
+        memory = clear_memory(user_id=user_id)
         return jsonify({
             'success': True,
             'message': 'Memory cleared',
@@ -64,9 +67,9 @@ def clear():
 def get_history():
     """Get saved chat history"""
     try:
-        from flask import request
         days = request.args.get('days', None, type=int)
-        history = get_chat_history(days)
+        user_id = request.args.get('user_id', None)
+        history = get_chat_history(days, user_id=user_id)
         
         return jsonify({
             'success': True,
@@ -83,10 +86,11 @@ def get_history():
 def get_stats():
     """Get memory statistics"""
     try:
-        memory = load_memory()
-        history = get_chat_history()
+        user_id = request.args.get('user_id', None)
+        memory = load_memory(user_id=user_id)
+        history = get_chat_history(None, user_id=user_id)
         
-        rel_level = memory['relationship_level']
+        rel_level = memory.get('relationship_level', 0)
         # Determine relationship stage (now includes negative)
         if rel_level >= 80:
             relationship_stage = "💗 Deeply Connected"
@@ -104,22 +108,22 @@ def get_stats():
             relationship_stage = "💔 Hostile"
         
         stats = {
-            'user_name': memory['user_name'],
-            'conversation_count': memory['conversation_count'],
+            'user_name': memory.get('user_name'),
+            'conversation_count': memory.get('conversation_count', 0),
             'total_saved_messages': len(history),
-            'learned_facts_count': len(memory['learned_facts']),
-            'interests_count': len(memory['interests']),
-            'preferences_count': len(memory['preferences']),
+            'learned_facts_count': len(memory.get('learned_facts', {})),
+            'interests_count': len(memory.get('interests', {})),
+            'preferences_count': len(memory.get('preferences', {})),
             'positive_interactions': memory.get('positive_interactions', 0),
             'negative_interactions': memory.get('negative_interactions', 0),
-            'first_conversation': memory['created_at'],
-            'last_conversation': memory['last_conversation'],
+            'first_conversation': memory.get('created_at'),
+            'last_conversation': memory.get('last_conversation'),
             'relationship_level': rel_level,
             'relationship_stage': relationship_stage,
-            'personality_traits': memory['user_personality_profile'].get('traits', []),
-            'emotional_tone': memory['user_personality_profile'].get('emotional_tone', 'friendly'),
-            'engagement_level': memory['user_personality_profile'].get('engagement_level', 'moderate'),
-            'rina_conclusions': memory['conclusions_about_user']
+            'personality_traits': memory.get('user_personality_profile', {}).get('traits', []),
+            'emotional_tone': memory.get('user_personality_profile', {}).get('emotional_tone', 'friendly'),
+            'engagement_level': memory.get('user_personality_profile', {}).get('engagement_level', 'moderate'),
+            'rina_conclusions': memory.get('conclusions_about_user', {})
         }
         
         return jsonify({

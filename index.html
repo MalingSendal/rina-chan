@@ -41,7 +41,10 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h2>Rina-chan's Memories 💭</h2>
-                <button class="modal-close" id="memory-close">&times;</button>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <button id="memory-clear-btn" title="Clear all memories">🧹 Clear</button>
+                    <button class="modal-close" id="memory-close">&times;</button>
+                </div>
             </div>
             <div class="modal-body">
                 <div id="memory-stats"></div>
@@ -60,6 +63,9 @@
     <script src="js/live2dcubismcore.min.js"></script>
 
     <script src="js/cubism4.min.js"></script>
+
+    <div id="chat-history"></div>
+    <pre id="full-history-json" style="display:none"></pre>
 
     <script>
         // Backend API Configuration (using relative URL for same origin)
@@ -131,6 +137,39 @@
             }
         }
 
+            // Clear memory button handler (with confirmation)
+            const memoryClearBtn = document.getElementById('memory-clear-btn');
+            memoryClearBtn.addEventListener('click', async () => {
+                const ok = confirm('Are you sure you want to clear all saved memories and chat history? This cannot be undone.');
+                if (!ok) return;
+
+                try {
+                    memoryClearBtn.disabled = true;
+                    const res = await fetch('/memory/clear', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({})
+                    });
+                    const data = await res.json();
+                    if (data && data.success) {
+                        // Clear UI history and reload stats
+                        const fullElem = document.getElementById('full-history-json');
+                        if (fullElem) fullElem.textContent = '';
+                        chatMessages.innerHTML = '';
+                        addBotMessage('All memories cleared. I will start fresh.');
+                        await loadMemoryStats();
+                    } else {
+                        console.error('Failed to clear memory:', data);
+                        alert('Failed to clear memory. See console for details.');
+                    }
+                } catch (err) {
+                    console.error('Error clearing memory:', err);
+                    alert('Error while clearing memory. See console.');
+                } finally {
+                    memoryClearBtn.disabled = false;
+                }
+            });
+
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
@@ -178,16 +217,26 @@
                 const response = await fetch('/memory/history');
                 if (!response.ok) return false;
                 const data = await response.json();
-                if (data.success && Array.isArray(data.history) && data.history.length > 0) {
-                    // Sort chronologically by timestamp
-                    const hist = data.history.slice().sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-                    chatMessages.innerHTML = '';
-                    for (const entry of hist) {
-                        if (entry.user) addUserMessage(entry.user);
-                        if (entry.bot) addBotMessage(entry.bot);
-                    }
-                    return true;
+
+                // Full history preserved in hidden element (JSON)
+                const fullHistory = Array.isArray(data.history) ? data.history : [];
+                const fullElem = document.getElementById('full-history-json');
+                if (fullElem) fullElem.textContent = JSON.stringify(fullHistory, null, 2);
+
+                // Render only messages from Ren (Discord ID)
+                const USER_FILTER_ID = '310686182491160576';
+                const filtered = fullHistory
+                    .filter(h => String(h.user_id) === USER_FILTER_ID && (h.user_message || '').trim())
+                    .slice()
+                    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+                chatMessages.innerHTML = '';
+                for (const entry of filtered) {
+                    addUserMessage(entry.user_message || '');
+                    if (entry.bot_response) addBotMessage(entry.bot_response);
                 }
+
+                return filtered.length > 0;
             } catch (err) {
                 console.error('Failed to load chat history:', err);
             }

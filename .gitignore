@@ -16,3 +16,5 @@ rina-chan.yaml
 (old) app.py
 start.bat
 start.sh
+discord_bot.py
+debug.log

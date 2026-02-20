@@ -19,6 +19,7 @@ def create_app():
         CHARACTER_NAME=os.getenv('CHARACTER_NAME'),
         APP_IP=os.getenv('APP_IP'),
         USER=os.getenv('USER'),
+        OLLAMA_NUM_CTX=os.getenv('OLLAMA_NUM_CTX'),
         SECRET_KEY=os.getenv('SECRET_KEY', 'dev-key-change-me')
     )
     

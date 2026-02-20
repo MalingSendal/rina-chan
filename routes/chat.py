@@ -1,7 +1,8 @@
 from flask import Blueprint, request, jsonify, send_from_directory
 import requests
 import os
-from utils.memory import load_memory, update_memory_with_conversation, get_memory_summary, get_rina_insight, save_chat_history, generate_mood
+from utils.memory import load_memory, update_memory_with_conversation, get_memory_summary, get_rina_insight, save_chat_history, generate_mood, retrieve_relevant_memories
+from config import DEFAULT_DISCORD_REN_ID, DEFAULT_USER_NAME
 
 chat_bp = Blueprint('chat', __name__)
 chat_history = []
@@ -17,41 +18,72 @@ def chat():
     """Handle chat requests with memory integration"""
     from app import create_app
     from config import SYSTEM_PROMPT, SYSTEM_PROMPT_NSFW
-    
+    from utils.memory import load_memory, save_memory, save_chat_history
+
     app = create_app()
     
-    data = request.get_json()
+    data = request.get_json() or {}
     user_message = data.get('message', '')
     nsfw_mode = data.get('nsfw_mode', False)
+    user_id = data.get('user_id', None)
+    user_reference = data.get('user_reference', None)
 
     if not user_message:
         return jsonify({'response': 'Say something! -pouts-'}), 400
 
     try:
-        # Load user memory
-        memory = load_memory()
+        memory = load_memory(user_id=user_id)
+
+        uid_str = str(user_id) if user_id else str(DEFAULT_DISCORD_REN_ID)
+        is_ren = uid_str == str(DEFAULT_DISCORD_REN_ID)
         
-        # update memory with this conversation 
-        update_memory_with_conversation(memory, user_message, "") 
+        if is_ren:
+            memory['user_name'] = DEFAULT_USER_NAME
+        else:
+            if user_reference:
+                memory['user_name'] = user_reference
+
+        save_memory(memory, user_id=user_id)
+
+        update_memory_with_conversation(memory, user_message, "")
 
         memory_summary = get_memory_summary(memory)
         rina_insight = get_rina_insight(memory)
+
+        # Retrieve a few relevant long-term items for this query
+        relevant_items = retrieve_relevant_memories(memory, user_message, max_results=6)
+        relevant_text = ''
+        if relevant_items:
+            parts = []
+            for it in relevant_items:
+                parts.append(f"[{it['type']}]: {it['text']}")
+            relevant_text = '\n'.join(parts)
+        
+        # Extract clean username (remove <@ and > from mention format)
+        user_display_name = memory['user_name']
+        if user_display_name.startswith('<@') and user_display_name.endswith('>'):
+            # Already in mention format, use as-is for tagging
+            user_display_for_prompt = user_display_name
+        else:
+            user_display_for_prompt = user_display_name
         
         system_prompt = SYSTEM_PROMPT_NSFW if nsfw_mode else SYSTEM_PROMPT
         
+        # Inject memory, feelings, and a short list of relevant past items
         system_prompt_with_memory = f"""{system_prompt}
 
-=== YOUR KNOWLEDGE OF USER ===
-{memory_summary}
+    === YOUR KNOWLEDGE OF USER ===
+    {memory_summary}
 
-=== YOUR PERSONAL FEELINGS ===
-{rina_insight if rina_insight else "You're just starting to get to know user, and you're excited to learn more about them."}
+    === YOUR PERSONAL FEELINGS ===
+    {rina_insight}
 
-=== RELATIONSHIP STAGE ===
-Relationship intimacy level: {memory['relationship_level']}/100
-Conversation history: {memory['conversation_count']} conversations
-{f"Communication style you've noticed: {memory['user_personality_profile'].get('communication_style', 'developing')}" if memory['user_personality_profile'] else ""}
-"""
+    """
+
+        if relevant_text:
+            system_prompt_with_memory += f"\n=== RELEVANT PAST MEMORIES ===\n{relevant_text}\n\n"
+
+        system_prompt_with_memory += f"[In your responses, refer to the user as: {user_display_for_prompt}]\n"
         
         ollama_api_url = f'http://{app.config["OLLAMA_IP"]}:{app.config["OLLAMA_PORT"]}/api/generate'
         
@@ -96,7 +128,8 @@ Conversation history: {memory['conversation_count']} conversations
         chat_history.append({'role': 'user', 'content': user_message})
         chat_history.append({'role': 'assistant', 'content': response_text})
         
-        save_chat_history(user_message, response_text, nsfw_mode)
+        # Save chat history to per-user file
+        save_chat_history(user_message, response_text, nsfw_mode, user_id=user_id)
 
         if len(chat_history) > 50:
             chat_history.pop(0)

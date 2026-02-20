@@ -14,7 +14,8 @@ def get_config():
         'ollama_port': app.config['OLLAMA_PORT'],
         'ollama_model': app.config['OLLAMA_MODEL'],
         'character_name': app.config['CHARACTER_NAME'],
-        'app_ip': app.config['APP_IP']
+        'app_ip': app.config['APP_IP'],
+        'num_ctx': app.config.get('OLLAMA_NUM_CTX')
     })
 
 @system_bp.route('/health', methods=['GET'])

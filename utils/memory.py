@@ -2,6 +2,8 @@ import json
 import os
 from datetime import datetime
 from dotenv import load_dotenv
+from collections import defaultdict
+from config import DEFAULT_USER_NAME, DEFAULT_DISCORD_REN_ID
 
 load_dotenv()
 
@@ -12,38 +14,33 @@ HISTORY_DIR = 'data/chat_history'
 POSITIVE_WORDS = {'love', 'like', 'good', 'great', 'awesome', 'amazing', 'happy', 'glad', 'thank', 'thanks', 'appreciate', 'sweet', 'cute', 'adorable', 'fun', 'best', 'perfect', 'nice', 'cool', 'fantastic', 'wonderful', 'pleased', 'enjoy', 'cherish', 'adore', 'precious', 'darling', 'miss', 'care', 'trust', 'kind', 'gentle', 'hug', 'kiss'}
 NEGATIVE_WORDS = {'hate', 'terrible', 'awful', 'stupid', 'dumb', 'annoying', 'frustrating', 'angry', 'mad', 'upset', 'sad', 'disappointed', 'dislike', 'horrible', 'worst', 'rude', 'mean', 'cruel', 'evil', 'vile', 'despise', 'loathe', 'contempt', 'scorn', 'betray', 'hurt', 'pain', 'suffer', 'pathetic', 'useless', 'worthless', 'shut up', 'stop', 'leave', 'go away', 'ignore'}
 
+# Default Discord ID for Ren (used when Flask web doesn't supply user_id)
+DEFAULT_DISCORD_REN_ID = os.getenv('DISCORD_REN_ID', '310686182491160576')
+
 def ensure_data_dirs():
     """Create necessary directories"""
     os.makedirs('data', exist_ok=True)
     os.makedirs(HISTORY_DIR, exist_ok=True)
 
 def get_user_name_from_env():
-    """Get user name from environment variable, with fallback"""
-    return os.getenv('USER', 'Ren')  # 'Ren' is the default
+    """Get default user name from env (Ren)"""
+    return DEFAULT_USER_NAME
 
-def load_memory():
-    """Load user memory from file"""
-    ensure_data_dirs()
-    
-    if not os.path.exists(MEMORY_FILE):
-        return create_default_memory()
-    
-    try:
-        with open(MEMORY_FILE, 'r', encoding='utf-8') as f:
-            memory = json.load(f)
-            # Ensure new fields exist for older memory files
-            if 'positive_interactions' not in memory:
-                memory['positive_interactions'] = 0
-            if 'negative_interactions' not in memory:
-                memory['negative_interactions'] = 0
-            return memory
-    except:
-        return create_default_memory()
+def memory_file_for(user_id=None):
+    uid = str(user_id) if user_id else DEFAULT_DISCORD_REN_ID
+    return os.path.join('data', f'memory_{uid}.json')
 
-def create_default_memory():
+def history_file_for(user_id=None):
+    uid = str(user_id) if user_id else DEFAULT_DISCORD_REN_ID
+    return os.path.join(HISTORY_DIR, f'history_{uid}.jsonl')
+
+def create_default_memory(user_id=None):
     """Create default memory structure"""
-    return {
-        'user_name': get_user_name_from_env(),
+    uid = str(user_id) if user_id else DEFAULT_DISCORD_REN_ID
+    is_ren = uid == str(DEFAULT_DISCORD_REN_ID)
+    
+    m = {
+        'user_name': DEFAULT_USER_NAME if is_ren else f"<@{uid}>",
         'personality_traits': [],
         'preferences': [],
         'interests': [],
@@ -60,16 +57,92 @@ def create_default_memory():
         'conversation_count': 0,
         'last_conversation': None,
         'created_at': datetime.now().isoformat(),
-        'updated_at': datetime.now().isoformat()
+        'updated_at': datetime.now().isoformat(),
+        '_user_id': uid
     }
+    return m
 
-def save_memory(memory):
-    """Save user memory to file"""
+def load_memory(user_id=None):
+    """Load user memory from file (per-user)"""
     ensure_data_dirs()
+    uid = str(user_id) if user_id else DEFAULT_DISCORD_REN_ID
+    mem_file = memory_file_for(uid)
+    if not os.path.exists(mem_file):
+        m = create_default_memory(user_id=uid)
+        return m
+    try:
+        with open(mem_file, 'r', encoding='utf-8') as f:
+            memory = json.load(f)
+            if 'positive_interactions' not in memory:
+                memory['positive_interactions'] = 0
+            if 'negative_interactions' not in memory:
+                memory['negative_interactions'] = 0
+            memory['_user_id'] = uid
+            return memory
+    except:
+        m = create_default_memory(user_id=uid)
+        return m
+
+def save_memory(memory, user_id=None):
+    """Save user memory to file (per-user)"""
+    ensure_data_dirs()
+    uid = str(user_id) if user_id else memory.get('_user_id', DEFAULT_DISCORD_REN_ID)
     memory['updated_at'] = datetime.now().isoformat()
-    
-    with open(MEMORY_FILE, 'w', encoding='utf-8') as f:
+    memory['_user_id'] = uid
+    with open(memory_file_for(uid), 'w', encoding='utf-8') as f:
         json.dump(memory, f, ensure_ascii=False, indent=2)
+
+def clear_memory(user_id=None):
+    """Clear all memory for a user and return default memory"""
+    ensure_data_dirs()
+    uid = str(user_id) if user_id else DEFAULT_DISCORD_REN_ID
+    mem_file = memory_file_for(uid)
+    try:
+        if os.path.exists(mem_file):
+            os.remove(mem_file)
+    except:
+        pass
+    m = create_default_memory()
+    m['_user_id'] = uid
+    save_memory(m, user_id=uid)
+    return m
+
+def save_chat_history(user_message, bot_response, nsfw_mode=False, user_id=None):
+    """Save chat history to per-user file"""
+    ensure_data_dirs()
+    uid = str(user_id) if user_id else DEFAULT_DISCORD_REN_ID
+    line = json.dumps({
+        'timestamp': datetime.now().isoformat(),
+        'user_id': uid,
+        'user_message': user_message,
+        'bot_response': bot_response,
+        'nsfw': bool(nsfw_mode)
+    }, ensure_ascii=False)
+    with open(history_file_for(uid), 'a', encoding='utf-8') as f:
+        f.write(line + "\n")
+
+def get_chat_history(days=None, user_id=None):
+    """Get chat history from per-user file(s)"""
+    ensure_data_dirs()
+    uid = str(user_id) if user_id else DEFAULT_DISCORD_REN_ID
+    hist_file = history_file_for(uid)
+    if not os.path.exists(hist_file):
+        return []
+    out = []
+    try:
+        with open(hist_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                try:
+                    out.append(json.loads(line.strip()))
+                except:
+                    continue
+        # filter by days if requested
+        if days:
+            cutoff = datetime.now() - timedelta(days=days)
+            out = [h for h in out if datetime.fromisoformat(h['timestamp']) >= cutoff]
+        return out
+    except:
+        return []
 
 def analyze_sentiment(text):
     """Simple keyword-based sentiment analysis"""
@@ -213,10 +286,17 @@ def update_memory_with_conversation(memory, user_message, bot_response):
     
     # Analyze personality and update profile
     memory['user_personality_profile'] = analyze_user_personality(memory)
-    
+
     # Generate conclusions based on patterns
     memory['conclusions_about_user'] = generate_conclusions(memory)
-    
+
+    # Compress older memories into long-term storage if needed
+    try:
+        compress_long_term_memory(memory)
+    except Exception:
+        # non-fatal: continue even if compression fails
+        pass
+
     save_memory(memory)
     return memory
 
@@ -388,55 +468,121 @@ def generate_mood(memory, bot_response, nsfw_mode=False):
         return 'happy'
     return mood
 
-def save_chat_history(user_message, bot_response, nsfw_mode=False):
-    """Save chat history to file"""
-    ensure_data_dirs()
-    
-    today = datetime.now().strftime('%Y-%m-%d')
-    history_file = os.path.join(HISTORY_DIR, f'chat_{today}.json')
-    
-    chat_entry = {
-        'timestamp': datetime.now().isoformat(),
-        'user': user_message,
-        'bot': bot_response,
-        'nsfw_mode': nsfw_mode
-    }
-    
-    if os.path.exists(history_file):
-        with open(history_file, 'r', encoding='utf-8') as f:
-            history = json.load(f)
-    else:
-        history = []
-    
-    history.append(chat_entry)
-    
-    with open(history_file, 'w', encoding='utf-8') as f:
-        json.dump(history, f, ensure_ascii=False, indent=2)
 
-def get_chat_history(days=None):
-    """Get chat history from file(s)"""
-    ensure_data_dirs()
-    
-    all_chats = []
-    
-    if not os.path.exists(HISTORY_DIR):
-        return all_chats
-    
-    for filename in sorted(os.listdir(HISTORY_DIR), reverse=True):
-        if filename.startswith('chat_') and filename.endswith('.json'):
-            filepath = os.path.join(HISTORY_DIR, filename)
-            try:
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    chats = json.load(f)
-                    all_chats.extend(chats)
-            except:
-                continue
-    
-    return all_chats
+def compress_long_term_memory(memory, max_memories=120, keep_recent=40):
+    """Compress oldest memories into a simple long-term archive/summary.
 
-def clear_memory():
-    """Reset all memories (admin function)"""
-    ensure_data_dirs()
-    memory = create_default_memory()
-    save_memory(memory)
+    This is a lightweight alternative to a vector DB: we extract facts,
+    preferences, and interests from older memories and append them to
+    `long_term_archive` and update `long_term_summary` so the system
+    prompt can include long-term context without sending the entire history.
+    """
+    if not isinstance(memory, dict):
+        return memory
+
+    mem_list = memory.get('memories', [])
+    if len(mem_list) <= max_memories:
+        return memory
+
+    # Determine which to archive (older ones)
+    to_archive = mem_list[:-keep_recent]
+
+    # Extract short summaries from archived messages
+    summaries = []
+    for m in to_archive:
+        user_text = m.get('user_said', '')
+        bot_text = m.get('rina_said', '')
+        pts = extract_memory_points(user_text, bot_text)
+        for f in pts.get('facts', []) + pts.get('preferences', []) + pts.get('interests', []):
+            if f not in summaries:
+                summaries.append(f)
+
+    # Append raw archived messages to a persistent archive list
+    archive = memory.setdefault('long_term_archive', [])
+    archive.extend(to_archive)
+
+    # Build or append to a running long-term summary (keep it reasonably sized)
+    existing = memory.get('long_term_summary', '')
+    appended = ' '.join(summaries[:40])
+    combined = (existing + ' ' + appended).strip()
+    # trim to ~2000 chars to avoid overly long prompts
+    if len(combined) > 2000:
+        combined = combined[-2000:]
+    memory['long_term_summary'] = combined
+
+    # Remove archived items from the in-memory recent list
+    memory['memories'] = mem_list[-keep_recent:]
+
+    # Persist changes
+    try:
+        save_memory(memory)
+    except Exception:
+        pass
+
     return memory
+
+
+def retrieve_relevant_memories(memory, query, max_results=6):
+    """Retrieve simple relevant long-term items using keyword matching.
+
+    This checks `long_term_summary`, `learned_facts`, `preferences`,
+    `interests`, recent `memories`, and the `long_term_archive` for
+    any items that share words with the query. Returns a small list
+    of dicts with `type` and `text`.
+    """
+    if not query:
+        return []
+
+    q_words = set(w for w in query.lower().split() if len(w) > 2)
+    candidates = []
+
+    def score_text(t):
+        if not t:
+            return 0
+        lw = t.lower()
+        return sum(1 for w in q_words if w in lw)
+
+    # Check long-term summary first
+    lt = memory.get('long_term_summary', '')
+    if lt:
+        s = score_text(lt)
+        if s > 0:
+            candidates.append(('long_term_summary', lt, s))
+
+    # Learned facts / preferences / interests
+    for f in memory.get('learned_facts', []) + memory.get('preferences', []) + memory.get('interests', []):
+        s = score_text(f)
+        if s > 0:
+            ttype = 'fact' if f in memory.get('learned_facts', []) else ('preference' if f in memory.get('preferences', []) else 'interest')
+            candidates.append((ttype, f, s))
+
+    # Recent memories
+    for m in memory.get('memories', []):
+        text = (m.get('user_said', '') + ' ' + m.get('rina_said', '')).strip()
+        s = score_text(text)
+        if s > 0:
+            candidates.append(('recent_memory', text, s))
+
+    # Long-term archive (scan last N items to limit cost)
+    for m in memory.get('long_term_archive', [])[-200:]:
+        text = (m.get('user_said', '') + ' ' + m.get('rina_said', '')).strip()
+        s = score_text(text)
+        if s > 0:
+            candidates.append(('archived_memory', text, s))
+
+    # Sort by score desc, dedupe, and return top results
+    candidates.sort(key=lambda x: x[2], reverse=True)
+    seen = set()
+    out = []
+    for t, txt, _ in candidates:
+        if txt in seen:
+            continue
+        seen.add(txt)
+        out.append({'type': t, 'text': txt})
+        if len(out) >= max_results:
+            break
+
+    return out
+
+
+# Note: `clear_memory(user_id=None)` is defined earlier and should be used by routes.
