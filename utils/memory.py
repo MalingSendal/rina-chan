@@ -1,8 +1,8 @@
 import json
 import os
-from datetime import datetime
+import re
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from collections import defaultdict
 from config import DEFAULT_USER_NAME, DEFAULT_DISCORD_REN_ID
 
 load_dotenv()
@@ -35,21 +35,18 @@ def history_file_for(user_id=None):
     return os.path.join(HISTORY_DIR, f'history_{uid}.jsonl')
 
 def create_default_memory(user_id=None):
-    """Create default memory structure"""
+    """Create default memory structure with cache fields"""
     uid = str(user_id) if user_id else DEFAULT_DISCORD_REN_ID
     is_ren = uid == str(DEFAULT_DISCORD_REN_ID)
     
     m = {
         'user_name': DEFAULT_USER_NAME if is_ren else f"<@{uid}>",
-        'personality_traits': [],
         'preferences': [],
         'interests': [],
-        'relationship_history': [],
-        'important_dates': [],
         'memories': [],
         'learned_facts': [],
         'conclusions_about_user': {},
-        'relationship_level': 0,          # -100 to 100
+        'relationship_level': 0,
         'positive_interactions': 0,
         'negative_interactions': 0,
         'communication_style': 'neutral',
@@ -58,7 +55,13 @@ def create_default_memory(user_id=None):
         'last_conversation': None,
         'created_at': datetime.now().isoformat(),
         'updated_at': datetime.now().isoformat(),
-        '_user_id': uid
+        '_user_id': uid,
+        # Cache fields
+        '_cached_summary': '',
+        '_cached_insight': '',
+        '_last_full_update': 0,
+        'long_term_summary': '',
+        'long_term_archive': []
     }
     return m
 
@@ -68,20 +71,22 @@ def load_memory(user_id=None):
     uid = str(user_id) if user_id else DEFAULT_DISCORD_REN_ID
     mem_file = memory_file_for(uid)
     if not os.path.exists(mem_file):
-        m = create_default_memory(user_id=uid)
-        return m
+        return create_default_memory(user_id=uid)
     try:
         with open(mem_file, 'r', encoding='utf-8') as f:
             memory = json.load(f)
-            if 'positive_interactions' not in memory:
-                memory['positive_interactions'] = 0
-            if 'negative_interactions' not in memory:
-                memory['negative_interactions'] = 0
+            # Ensure all fields exist
+            memory.setdefault('positive_interactions', 0)
+            memory.setdefault('negative_interactions', 0)
+            memory.setdefault('_cached_summary', '')
+            memory.setdefault('_cached_insight', '')
+            memory.setdefault('_last_full_update', 0)
+            memory.setdefault('long_term_summary', '')
+            memory.setdefault('long_term_archive', [])
             memory['_user_id'] = uid
             return memory
-    except:
-        m = create_default_memory(user_id=uid)
-        return m
+    except Exception:
+        return create_default_memory(user_id=uid)
 
 def save_memory(memory, user_id=None):
     """Save user memory to file (per-user)"""
@@ -102,7 +107,7 @@ def clear_memory(user_id=None):
             os.remove(mem_file)
     except:
         pass
-    m = create_default_memory()
+    m = create_default_memory(user_id=uid)
     m['_user_id'] = uid
     save_memory(m, user_id=uid)
     return m
@@ -134,14 +139,13 @@ def get_chat_history(days=None, user_id=None):
             for line in f:
                 try:
                     out.append(json.loads(line.strip()))
-                except:
+                except Exception:
                     continue
-        # filter by days if requested
         if days:
             cutoff = datetime.now() - timedelta(days=days)
             out = [h for h in out if datetime.fromisoformat(h['timestamp']) >= cutoff]
         return out
-    except:
+    except Exception:
         return []
 
 def analyze_sentiment(text):
@@ -155,6 +159,22 @@ def analyze_sentiment(text):
         return 'negative'
     else:
         return 'neutral'
+
+def summarize_text(text, max_sentences=3, max_chars=300):
+    """
+    Simple extractive summarizer: takes first `max_sentences` sentences.
+    If the text is shorter, returns it unchanged.
+    """
+    if not text:
+        return ""
+    # Simple sentence splitting on .!? followed by space
+    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+    if len(sentences) <= max_sentences:
+        return text
+    summary = ' '.join(sentences[:max_sentences])
+    if len(summary) > max_chars:
+        summary = summary[:max_chars] + '…'
+    return summary
 
 def extract_memory_points(user_message, bot_response):
     """Extract potential memory points from conversation"""
@@ -172,13 +192,46 @@ def extract_memory_points(user_message, bot_response):
     if any(word in message_lower for word in ['like', 'love', 'enjoy', 'interested in']):
         memory_points['interests'].append(f"Mentioned interest: {user_message}")
     
-    if any(word in message_lower for word in ['prefer', 'favorite', 'prefer']):
+    if any(word in message_lower for word in ['prefer', 'favorite']):
         memory_points['preferences'].append(f"Preference: {user_message}")
     
     if any(word in message_lower for word in ['birthday', 'birth date', 'born on']):
         memory_points['facts'].append(f"Birthday/birth info: {user_message}")
     
     return memory_points
+
+def mood_to_communication_style(mood):
+    """Map Rina's mood to her communication style"""
+    mood_map = {
+        'happy': 'cheerful',
+        'joyful': 'playful',
+        'excited': 'energetic',
+        'sad': 'somber',
+        'depressed': 'withdrawn',
+        'upset': 'tense',
+        'angry': 'stern',
+        'mad': 'aggressive',
+        'furious': 'hostile',
+        'frightened': 'timid',
+        'scared': 'cautious',
+        'terrified': 'frantic',
+        'nerveous': 'anxious',
+        'anxious': 'worried',
+        'puzzled': 'curious',
+        'confused': 'uncertain',
+        'shocked': 'startled',
+        'suprised': 'intrigued',
+        'smug': 'confident',
+        'proud': 'dignified',
+        'doya': 'playful',
+        'embarassed': 'flustered',
+        'flustered': 'bashful',
+        'dizzy': 'disoriented',
+        'sweat': 'stressed',
+        'resentful': 'bitter',
+        'bitter': 'cynical',
+    }
+    return mood_map.get(mood, 'balanced')
 
 def analyze_user_personality(memory):
     """Analyze all memories to form conclusions about the user"""
@@ -239,8 +292,121 @@ def analyze_user_personality(memory):
     
     return profile
 
-def update_memory_with_conversation(memory, user_message, bot_response):
-    """Update memory based on conversation, including sentiment and relationship level."""
+def _build_memory_summary(memory):
+    """Build a fresh summary string from current memory."""
+    summary_parts = [f"User's name is {memory['user_name']}."]
+
+    rel_level = memory['relationship_level']
+    if rel_level >= 80:
+        summary_parts.append(f"I've grown to care deeply about {memory['user_name']}. We have a special connection.")
+    elif rel_level >= 50:
+        summary_parts.append(f"We're getting quite close. I'm starting to feel a real bond with {memory['user_name']}.")
+    elif rel_level >= 20:
+        summary_parts.append(f"We're building a nice friendship together.")
+    elif rel_level >= -20:
+        summary_parts.append(f"We're still getting to know each other. It's okay.")
+    elif rel_level >= -50:
+        summary_parts.append(f"I'm a bit hurt and wary around {memory['user_name']}. Some things they've said bother me.")
+    else:
+        summary_parts.append(f"I feel resentful and cold toward {memory['user_name']}. They've said things that cut deep.")
+
+    if memory['user_personality_profile']:
+        profile = memory['user_personality_profile']
+        if profile['traits']:
+            traits_str = ', '.join(profile['traits'][:3])
+            summary_parts.append(f"I perceive {memory['user_name']} as {traits_str}.")
+        if profile['values']:
+            values_str = ', '.join(profile['values'])
+            summary_parts.append(f"Values that matter to {memory['user_name']}: {values_str}.")
+
+    if memory['conclusions_about_user']:
+        conclusions = memory['conclusions_about_user']
+        for key in ['closeness', 'distance', 'emotional_connection', 'humor', 'trust_level']:
+            if key in conclusions:
+                summary_parts.append(conclusions[key])
+
+    if memory['learned_facts']:
+        summary_parts.append(f"Facts I know: {', '.join(memory['learned_facts'][:2])}")
+    if memory['interests']:
+        interests = ', '.join([i.replace('Mentioned interest: ', '') for i in memory['interests'][:3]])
+        summary_parts.append(f"{memory['user_name']} is interested in: {interests}")
+
+    return " ".join(summary_parts)
+
+def _build_rina_insight(memory):
+    """Build a fresh insight string."""
+    insights = []
+    conclusions = memory['conclusions_about_user']
+    rel = memory['relationship_level']
+    if rel >= 50:
+        insights.append(f"I genuinely care about {memory['user_name']}.")
+    elif rel <= -30:
+        insights.append(f"I'm wary of {memory['user_name']}. They've hurt me.")
+    if 'bond' in conclusions:
+        insights.append(conclusions['bond'])
+    if memory['communication_style'] == 'playful' and rel >= 20:
+        insights.append("I love our playful banter together.")
+    if memory['conversation_count'] > 30 and rel >= 20:
+        insights.append(f"After all these conversations, I feel like {memory['user_name']} really gets me.")
+    return " ".join(insights) if insights else ""
+
+def get_memory_summary(memory):
+    """Return cached summary, or build if empty."""
+    if not memory.get('_cached_summary'):
+        memory['_cached_summary'] = _build_memory_summary(memory)
+    return memory['_cached_summary']
+
+def get_rina_insight(memory):
+    """Return cached insight, or build if empty."""
+    if not memory.get('_cached_insight'):
+        memory['_cached_insight'] = _build_rina_insight(memory)
+    return memory['_cached_insight']
+
+def generate_conclusions(memory):
+    """Generate Rina's personal conclusions about the user"""
+    conclusions = {}
+    profile = memory['user_personality_profile']
+    
+    if profile.get('traits'):
+        main_traits = ', '.join(profile['traits'][:3])
+        conclusions['personality'] = f"{get_user_name_from_env()} is very {main_traits}"
+    
+    if memory['interests']:
+        conclusions['interests_summary'] = f"{get_user_name_from_env()} is passionate about {len(memory['interests'])} different things"
+    
+    # Relationship-based conclusions
+    rel = memory['relationship_level']
+    if rel >= 50:
+        conclusions['closeness'] = f"We've had many conversations together, and I'm starting to really understand you~"
+    elif rel >= 20:
+        conclusions['closeness'] = f"I enjoy our talks and feel we're becoming closer."
+    elif rel <= -20:
+        conclusions['distance'] = f"I feel hurt by some things you've said. It makes me wary."
+    elif rel <= -50:
+        conclusions['distance'] = f"I'm deeply resentful. You've said things that cut deep."
+    
+    if memory['conversation_count'] > 20:
+        conclusions['bond'] = f"I feel like we have a special connection now, {get_user_name_from_env()} ♡"
+    
+    if profile.get('emotional_tone') == 'warm':
+        conclusions['emotional_connection'] = "You have a warm, kind way of interacting that makes me happy"
+    
+    if 'curious' in profile.get('traits', []):
+        conclusions['intellectual'] = "I love how you're always asking questions and wanting to learn more"
+    
+    if 'humorous' in profile.get('traits', []):
+        conclusions['humor'] = "Your sense of humor makes our conversations so much more enjoyable"
+    
+    if rel >= 50:
+        conclusions['trust_level'] = "I trust you, and I genuinely care about what you say"
+    elif rel <= -30:
+        conclusions['trust_level'] = "I don't fully trust you. Your words have hurt me."
+    
+    return conclusions
+
+def update_memory_with_conversation(memory, user_message, bot_response, full_update=False):
+    """Update memory based on conversation. If full_update is True, run expensive analysis."""
+    # Extract memory points (cheap)
     memory_points = extract_memory_points(user_message, bot_response)
     
     for fact in memory_points['facts']:
@@ -264,9 +430,7 @@ def update_memory_with_conversation(memory, user_message, bot_response):
     elif sentiment == 'negative':
         delta = -2
         memory['negative_interactions'] += 1
-    # neutral: delta = 0
-
-    # Update relationship level, clamp to [-100, 100]
+    
     memory['relationship_level'] = max(-100, min(100, memory['relationship_level'] + delta))
     
     # Add to memories
@@ -284,141 +448,97 @@ def update_memory_with_conversation(memory, user_message, bot_response):
     memory['conversation_count'] += 1
     memory['last_conversation'] = datetime.now().isoformat()
     
-    # Analyze personality and update profile
-    memory['user_personality_profile'] = analyze_user_personality(memory)
-
-    # Generate conclusions based on patterns
-    memory['conclusions_about_user'] = generate_conclusions(memory)
-
-    # Compress older memories into long-term storage if needed
+    # Update rolling long-term summary with key points
+    if memory_points['facts'] or memory_points['interests'] or memory_points['preferences']:
+        new_points = ' '.join(memory_points['facts'] + memory_points['interests'] + memory_points['preferences'])
+        memory['long_term_summary'] = (memory['long_term_summary'] + ' ' + new_points).strip()
+        if len(memory['long_term_summary']) > 2000:
+            memory['long_term_summary'] = memory['long_term_summary'][-2000:]
+    
+    # Run expensive analysis only when requested
+    if full_update:
+        memory['user_personality_profile'] = analyze_user_personality(memory)
+        memory['conclusions_about_user'] = generate_conclusions(memory)
+        memory['_last_full_update'] = memory['conversation_count']
+        # Update caches
+        memory['_cached_summary'] = _build_memory_summary(memory)
+        memory['_cached_insight'] = _build_rina_insight(memory)
+    
+    # Compress long-term memory if needed
     try:
         compress_long_term_memory(memory)
     except Exception:
-        # non-fatal: continue even if compression fails
         pass
-
+    
     save_memory(memory)
     return memory
 
-def generate_conclusions(memory):
-    """Generate Rina's personal conclusions about the user"""
-    conclusions = {}
-    profile = memory['user_personality_profile']
+def retrieve_relevant_memories(memory, query, max_results=6):
+    """Retrieve relevant items using keyword matching - optimized with limited scope."""
+    if not query:
+        return []
     
-    if profile['traits']:
-        main_traits = ', '.join(profile['traits'][:3])
-        conclusions['personality'] = f"{get_user_name_from_env()} is very {main_traits}"
+    q_words = set(w for w in query.lower().split() if len(w) > 2)
+    if not q_words:
+        return []
     
-    if memory['interests']:
-        if len(memory['interests']) > 0:
-            conclusions['interests_summary'] = f"{get_user_name_from_env()} is passionate about {len(memory['interests'])} different things"
+    candidates = []
     
-    # Relationship-based conclusions
-    rel = memory['relationship_level']
-    if rel >= 50:
-        conclusions['closeness'] = f"We've had many conversations together, and I'm starting to really understand you~"
-    elif rel >= 20:
-        conclusions['closeness'] = f"I enjoy our talks and feel we're becoming closer."
-    elif rel <= -20:
-        conclusions['distance'] = f"I feel hurt by some things you've said. It makes me wary."
-    elif rel <= -50:
-        conclusions['distance'] = f"I'm deeply resentful. You've said things that cut deep."
+    def score_text(t):
+        if not t:
+            return 0
+        lw = t.lower()
+        return sum(1 for w in q_words if w in lw)
     
-    if memory['conversation_count'] > 20:
-        conclusions['bond'] = f"I feel like we have a special connection now, {get_user_name_from_env()} ♡"
+    # Check long-term summary (fast, one string)
+    lt = memory.get('long_term_summary', '')
+    if lt:
+        s = score_text(lt)
+        if s > 0:
+            candidates.append(('long_term_summary', lt, s))
     
-    if profile['emotional_tone'] == 'warm':
-        conclusions['emotional_connection'] = "You have a warm, kind way of interacting that makes me happy"
+    # Check learned facts / preferences / interests (small lists)
+    for lst, typ in [(memory.get('learned_facts', []), 'fact'),
+                     (memory.get('preferences', []), 'preference'),
+                     (memory.get('interests', []), 'interest')]:
+        for item in lst:
+            s = score_text(item)
+            if s > 0:
+                candidates.append((typ, item, s))
     
-    if 'curious' in profile['traits']:
-        conclusions['intellectual'] = "I love how you're always asking questions and wanting to learn more"
+    # Check recent memories (limited to last 20)
+    for m in memory.get('memories', [])[-20:]:
+        text = (m.get('user_said', '') + ' ' + m.get('rina_said', '')).strip()
+        s = score_text(text)
+        if s > 0:
+            candidates.append(('recent_memory', text, s))
     
-    if 'humorous' in profile['traits']:
-        conclusions['humor'] = "Your sense of humor makes our conversations so much more enjoyable"
+    # Check long-term archive (only last 50 items)
+    for m in memory.get('long_term_archive', [])[-50:]:
+        text = (m.get('user_said', '') + ' ' + m.get('rina_said', '')).strip()
+        s = score_text(text)
+        if s > 0:
+            candidates.append(('archived_memory', text, s))
     
-    if rel >= 50:
-        conclusions['trust_level'] = "I trust you, and I genuinely care about what you say"
-    elif rel <= -30:
-        conclusions['trust_level'] = "I don't fully trust you. Your words have hurt me."
+    # Deduplicate and sort
+    seen = set()
+    scored = []
+    for typ, txt, s in candidates:
+        if txt in seen:
+            continue
+        seen.add(txt)
+        scored.append((s, typ, txt))
+    scored.sort(reverse=True)  # higher score first
     
-    return conclusions
+    out = []
+    for s, typ, txt in scored[:max_results]:
+        out.append({'type': typ, 'text': txt})
+    return out
 
-def get_memory_summary(memory):
-    """Create a summary of memories for the system prompt"""
-    summary_parts = [f"User's name is {memory['user_name']}."]
-    
-    # Add relationship context based on signed level
-    rel_level = memory['relationship_level']
-    if rel_level >= 80:
-        summary_parts.append(f"I've grown to care deeply about {memory['user_name']}. We have a special connection.")
-    elif rel_level >= 50:
-        summary_parts.append(f"We're getting quite close. I'm starting to feel a real bond with {memory['user_name']}.")
-    elif rel_level >= 20:
-        summary_parts.append(f"We're building a nice friendship together.")
-    elif rel_level >= -20:
-        summary_parts.append(f"We're still getting to know each other. It's okay.")
-    elif rel_level >= -50:
-        summary_parts.append(f"I'm a bit hurt and wary around {memory['user_name']}. Some things they've said bother me.")
-    else:
-        summary_parts.append(f"I feel resentful and cold toward {memory['user_name']}. They've said things that cut deep.")
-    
-    # Add personality insights
-    if memory['user_personality_profile']:
-        profile = memory['user_personality_profile']
-        if profile['traits']:
-            traits_str = ', '.join(profile['traits'][:3])
-            summary_parts.append(f"I perceive {memory['user_name']} as {traits_str}.")
-        
-        if profile['values']:
-            values_str = ', '.join(profile['values'])
-            summary_parts.append(f"Values that matter to {memory['user_name']}: {values_str}.")
-    
-    # Add learned conclusions
-    if memory['conclusions_about_user']:
-        conclusions = memory['conclusions_about_user']
-        if 'closeness' in conclusions:
-            summary_parts.append(conclusions['closeness'])
-        if 'distance' in conclusions:
-            summary_parts.append(conclusions['distance'])
-        if 'emotional_connection' in conclusions:
-            summary_parts.append(conclusions['emotional_connection'])
-        if 'humor' in conclusions:
-            summary_parts.append(conclusions['humor'])
-        if 'trust_level' in conclusions:
-            summary_parts.append(conclusions['trust_level'])
-    
-    # Add specific facts
-    if memory['learned_facts']:
-        summary_parts.append(f"Facts I know: {', '.join(memory['learned_facts'][:2])}")
-    
-    if memory['interests']:
-        interests = ', '.join([i.replace('Mentioned interest: ', '') for i in memory['interests'][:3]])
-        summary_parts.append(f"{memory['user_name']} is interested in: {interests}")
-    
-    return " ".join(summary_parts)
-
-def get_rina_insight(memory):
-    """Get Rina's personal inner thoughts about the user for her personality"""
-    insights = []
-    
-    conclusions = memory['conclusions_about_user']
-    rel = memory['relationship_level']
-    
-    if rel >= 50:
-        insights.append(f"I genuinely care about {memory['user_name']}.")
-    elif rel <= -30:
-        insights.append(f"I'm wary of {memory['user_name']}. They've hurt me.")
-    
-    if 'bond' in conclusions:
-        insights.append(conclusions['bond'])
-    
-    if memory['communication_style'] == 'playful' and rel >= 20:
-        insights.append("I love our playful banter together.")
-    
-    if memory['conversation_count'] > 30 and rel >= 20:
-        insights.append(f"After all these conversations, I feel like {memory['user_name']} really gets me.")
-    
-    return " ".join(insights) if insights else ""
+def update_communication_style_from_mood(memory, mood):
+    """Update Rina's communication style based on her latest mood"""
+    memory['communication_style'] = mood_to_communication_style(mood)
+    return memory
 
 def generate_mood(memory, bot_response, nsfw_mode=False):
     """Generate a simple mood/emotion tag for the latest response."""
@@ -428,13 +548,13 @@ def generate_mood(memory, bot_response, nsfw_mode=False):
         'frightened','scared','terrified','sweat','nerveous','anxious','doya','smug','proud',
         'embarassed','flustered','dizzy','suprised','shocked','puzzled','confused','resentful','bitter'
     }
-
+    
     rel = memory.get('relationship_level', 0)
-
+    
     # NSFW mode can bias toward excited if relationship is high enough
     if nsfw_mode and rel >= 50:
         return 'excited'
-
+    
     # Map heuristics -> allowed moods
     if any(k in text for k in ['love', '💕', '❤', 'so cute', 'adorable', 'cute', 'hee', 'hehe']):
         mood = 'happy'
@@ -462,31 +582,24 @@ def generate_mood(memory, bot_response, nsfw_mode=False):
             mood = 'upset'
         else:
             mood = 'resentful'
-
+    
     # Ensure mood is in allowed set; fallback to 'happy'
     if mood not in allowed:
         return 'happy'
     return mood
 
-
 def compress_long_term_memory(memory, max_memories=120, keep_recent=40):
-    """Compress oldest memories into a simple long-term archive/summary.
-
-    This is a lightweight alternative to a vector DB: we extract facts,
-    preferences, and interests from older memories and append them to
-    `long_term_archive` and update `long_term_summary` so the system
-    prompt can include long-term context without sending the entire history.
-    """
+    """Compress oldest memories into a simple long-term archive/summary."""
     if not isinstance(memory, dict):
         return memory
-
+    
     mem_list = memory.get('memories', [])
     if len(mem_list) <= max_memories:
         return memory
-
+    
     # Determine which to archive (older ones)
     to_archive = mem_list[:-keep_recent]
-
+    
     # Extract short summaries from archived messages
     summaries = []
     for m in to_archive:
@@ -496,93 +609,26 @@ def compress_long_term_memory(memory, max_memories=120, keep_recent=40):
         for f in pts.get('facts', []) + pts.get('preferences', []) + pts.get('interests', []):
             if f not in summaries:
                 summaries.append(f)
-
+    
     # Append raw archived messages to a persistent archive list
     archive = memory.setdefault('long_term_archive', [])
     archive.extend(to_archive)
-
-    # Build or append to a running long-term summary (keep it reasonably sized)
+    
+    # Build or append to a running long-term summary
     existing = memory.get('long_term_summary', '')
     appended = ' '.join(summaries[:40])
     combined = (existing + ' ' + appended).strip()
-    # trim to ~2000 chars to avoid overly long prompts
     if len(combined) > 2000:
         combined = combined[-2000:]
     memory['long_term_summary'] = combined
-
+    
     # Remove archived items from the in-memory recent list
     memory['memories'] = mem_list[-keep_recent:]
-
+    
     # Persist changes
     try:
         save_memory(memory)
     except Exception:
         pass
-
+    
     return memory
-
-
-def retrieve_relevant_memories(memory, query, max_results=6):
-    """Retrieve simple relevant long-term items using keyword matching.
-
-    This checks `long_term_summary`, `learned_facts`, `preferences`,
-    `interests`, recent `memories`, and the `long_term_archive` for
-    any items that share words with the query. Returns a small list
-    of dicts with `type` and `text`.
-    """
-    if not query:
-        return []
-
-    q_words = set(w for w in query.lower().split() if len(w) > 2)
-    candidates = []
-
-    def score_text(t):
-        if not t:
-            return 0
-        lw = t.lower()
-        return sum(1 for w in q_words if w in lw)
-
-    # Check long-term summary first
-    lt = memory.get('long_term_summary', '')
-    if lt:
-        s = score_text(lt)
-        if s > 0:
-            candidates.append(('long_term_summary', lt, s))
-
-    # Learned facts / preferences / interests
-    for f in memory.get('learned_facts', []) + memory.get('preferences', []) + memory.get('interests', []):
-        s = score_text(f)
-        if s > 0:
-            ttype = 'fact' if f in memory.get('learned_facts', []) else ('preference' if f in memory.get('preferences', []) else 'interest')
-            candidates.append((ttype, f, s))
-
-    # Recent memories
-    for m in memory.get('memories', []):
-        text = (m.get('user_said', '') + ' ' + m.get('rina_said', '')).strip()
-        s = score_text(text)
-        if s > 0:
-            candidates.append(('recent_memory', text, s))
-
-    # Long-term archive (scan last N items to limit cost)
-    for m in memory.get('long_term_archive', [])[-200:]:
-        text = (m.get('user_said', '') + ' ' + m.get('rina_said', '')).strip()
-        s = score_text(text)
-        if s > 0:
-            candidates.append(('archived_memory', text, s))
-
-    # Sort by score desc, dedupe, and return top results
-    candidates.sort(key=lambda x: x[2], reverse=True)
-    seen = set()
-    out = []
-    for t, txt, _ in candidates:
-        if txt in seen:
-            continue
-        seen.add(txt)
-        out.append({'type': t, 'text': txt})
-        if len(out) >= max_results:
-            break
-
-    return out
-
-
-# Note: `clear_memory(user_id=None)` is defined earlier and should be used by routes.
