@@ -1,32 +1,33 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, current_app
 import requests
 
 system_bp = Blueprint('system', __name__)
 
+# Reuse a single session for health-check calls
+_health_session = requests.Session()
+
+
 @system_bp.route('/config', methods=['GET'])
 def get_config():
     """Get current configuration"""
-    from app import create_app
-    app = create_app()
-    
+    cfg = current_app.config
     return jsonify({
-        'ollama_ip': app.config['OLLAMA_IP'],
-        'ollama_port': app.config['OLLAMA_PORT'],
-        'ollama_model': app.config['OLLAMA_MODEL'],
-        'character_name': app.config['CHARACTER_NAME'],
-        'app_ip': app.config['APP_IP'],
-        'num_ctx': app.config.get('OLLAMA_NUM_CTX')
+        'ollama_ip': cfg['OLLAMA_IP'],
+        'ollama_port': cfg['OLLAMA_PORT'],
+        'ollama_model': cfg['OLLAMA_MODEL'],
+        'character_name': cfg['CHARACTER_NAME'],
+        'app_ip': cfg['APP_IP'],
+        'num_ctx': cfg.get('OLLAMA_NUM_CTX')
     })
+
 
 @system_bp.route('/health', methods=['GET'])
 def health_check():
     """Check if Ollama is reachable"""
-    from app import create_app
-    app = create_app()
-    
+    cfg = current_app.config
     try:
-        response = requests.get(
-            f'http://{app.config["OLLAMA_IP"]}:{app.config["OLLAMA_PORT"]}/api/tags', 
+        response = _health_session.get(
+            f'http://{cfg["OLLAMA_IP"]}:{cfg["OLLAMA_PORT"]}/api/tags',
             timeout=5
         )
         if response.status_code == 200:
@@ -37,11 +38,11 @@ def health_check():
                 'ollama_reachable': True,
                 'available_models': model_names
             })
-    except:
+    except Exception:
         pass
 
     return jsonify({
         'status': 'error',
         'ollama_reachable': False,
-        'message': f'Cannot reach Ollama at {app.config["OLLAMA_IP"]}:{app.config["OLLAMA_PORT"]}'
+        'message': f'Cannot reach Ollama at {cfg["OLLAMA_IP"]}:{cfg["OLLAMA_PORT"]}'
     }), 500

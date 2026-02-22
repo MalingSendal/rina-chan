@@ -404,8 +404,13 @@ def generate_conclusions(memory):
     
     return conclusions
 
-def update_memory_with_conversation(memory, user_message, bot_response, full_update=False):
-    """Update memory based on conversation. If full_update is True, run expensive analysis."""
+def update_memory_with_conversation(memory, user_message, bot_response, full_update=False, skip_save=False):
+    """Update memory based on conversation. If full_update is True, run expensive analysis.
+
+    Args:
+        skip_save: When True, skip the blocking save_memory() call at the end.
+                   Use this when the caller will handle persistence asynchronously.
+    """
     # Extract memory points (cheap)
     memory_points = extract_memory_points(user_message, bot_response)
     
@@ -464,13 +469,15 @@ def update_memory_with_conversation(memory, user_message, bot_response, full_upd
         memory['_cached_summary'] = _build_memory_summary(memory)
         memory['_cached_insight'] = _build_rina_insight(memory)
     
-    # Compress long-term memory if needed
+    # Compress long-term memory if needed (in-memory only; no save inside compress)
     try:
-        compress_long_term_memory(memory)
+        _compress_long_term_memory_inplace(memory)
     except Exception:
         pass
-    
-    save_memory(memory)
+
+    # Only write to disk if the caller hasn't opted out (async callers pass skip_save=True)
+    if not skip_save:
+        save_memory(memory)
     return memory
 
 def retrieve_relevant_memories(memory, query, max_results=6):
@@ -588,19 +595,20 @@ def generate_mood(memory, bot_response, nsfw_mode=False):
         return 'happy'
     return mood
 
-def compress_long_term_memory(memory, max_memories=120, keep_recent=40):
-    """Compress oldest memories into a simple long-term archive/summary."""
+def _compress_long_term_memory_inplace(memory, max_memories=120, keep_recent=40):
+    """Compress oldest memories into archive/summary WITHOUT saving to disk.
+    
+    Callers are responsible for persisting the memory object afterwards.
+    """
     if not isinstance(memory, dict):
         return memory
-    
+
     mem_list = memory.get('memories', [])
     if len(mem_list) <= max_memories:
         return memory
-    
-    # Determine which to archive (older ones)
+
     to_archive = mem_list[:-keep_recent]
-    
-    # Extract short summaries from archived messages
+
     summaries = []
     for m in to_archive:
         user_text = m.get('user_said', '')
@@ -609,26 +617,26 @@ def compress_long_term_memory(memory, max_memories=120, keep_recent=40):
         for f in pts.get('facts', []) + pts.get('preferences', []) + pts.get('interests', []):
             if f not in summaries:
                 summaries.append(f)
-    
-    # Append raw archived messages to a persistent archive list
+
     archive = memory.setdefault('long_term_archive', [])
     archive.extend(to_archive)
-    
-    # Build or append to a running long-term summary
+
     existing = memory.get('long_term_summary', '')
     appended = ' '.join(summaries[:40])
     combined = (existing + ' ' + appended).strip()
     if len(combined) > 2000:
         combined = combined[-2000:]
     memory['long_term_summary'] = combined
-    
-    # Remove archived items from the in-memory recent list
     memory['memories'] = mem_list[-keep_recent:]
-    
-    # Persist changes
+
+    return memory
+
+
+def compress_long_term_memory(memory, max_memories=120, keep_recent=40):
+    """Compress oldest memories into a simple long-term archive/summary (saves to disk)."""
+    _compress_long_term_memory_inplace(memory, max_memories=max_memories, keep_recent=keep_recent)
     try:
         save_memory(memory)
     except Exception:
         pass
-    
     return memory
