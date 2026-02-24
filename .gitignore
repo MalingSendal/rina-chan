@@ -16,5 +16,6 @@ rina-chan.yaml
 start.bat
 start.sh
 discord_bot.py
+auto_bot.py
 debug.log
 nopush/
