@@ -4,12 +4,12 @@ A web-based AI companion featuring Live2D animation and personality-driven chat 
 
 ## Features
 
-✨ **Live2D Animation** - Beautiful animated character model
-💬 **Personality Chat** - Innocent, bratty, and engaging personality
-🔒 **NSFW Toggle** - Switch between normal and flirty modes with a slider
-🎨 **Simplistic UI** - Modern chat interface with smooth animations
-⚙️ **Easy Configuration** - IP and model settings in `.env` file
-🚀 **Ollama Integration** - Uses local Ollama LLM for localized, and private responses
+- ✨ **Live2D Animation** - Beautiful animated character model
+- 💬 **Personality Chat** - Innocent, bratty, and engaging personality
+- 🔒 **NSFW Toggle** - Switch between normal and flirty modes with a slider
+- 🎨 **Simplistic UI** - Modern chat interface with smooth animations
+- ⚙️ **Easy Configuration** - IP and model settings in `.env` file
+- 🚀 **Ollama Integration** - Uses local Ollama LLM for localized, and private responses
 
 ## Prerequisites
 
@@ -36,6 +36,7 @@ OLLAMA_PORT=11434              # Ollama API port (default 11434)
 OLLAMA_MODEL=llama3.2:3b       # Model name to use
 CHARACTER_NAME=Rina-chan       # Default Character name (no need to change this)
 USER=Ren                       # Change this if you want her to refer to your name
+APP_IP=192.168.XXX.XX          # Your Local IP Address
 ```
 
 ### 3. Start Ollama
