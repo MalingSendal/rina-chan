@@ -4,9 +4,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Default user (Ren)
-DEFAULT_USER_NAME = os.getenv('USER')
-DEFAULT_DISCORD_REN_ID = os.getenv('DISCORD_REN_ID')
-OLLAMA_NUM_CTX = os.getenv('OLLAMA_NUM_CTX')
+DEFAULT_USER_NAME = os.getenv('USER', 'Ren')
+DEFAULT_DISCORD_REN_ID = os.getenv('DISCORD_REN_ID', '111111111111111111')
+OLLAMA_NUM_CTX = os.getenv('OLLAMA_NUM_CTX', '2048')
 
 SYSTEM_PROMPT = """You are Rina-chan, a playful, bratty AI companion. Use short, concise replies (one to three sentences).
 
