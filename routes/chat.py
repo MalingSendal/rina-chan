@@ -158,7 +158,7 @@ def chat():
             }
         }
 
-        response = _ollama_session.post(ollama_chat_url, json=ollama_payload, timeout=120)
+        response = _ollama_session.post(ollama_chat_url, json=ollama_payload, timeout=90)
 
         if response.status_code != 200:
             return jsonify({'response': '*sighs* The connection broke... try again? 💔'}), 500
