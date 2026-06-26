@@ -1,303 +1,360 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rina-chan AI Companion</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
-    <canvas id="canvas"></canvas>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Rina-chan AI Companion</title>
+        <link rel="stylesheet" href="style.css" />
+    </head>
+    <body>
+        <canvas id="canvas"></canvas>
 
-    <!-- Fullscreen Button -->
-    <button id="fullscreen-btn" aria-label="Toggle fullscreen">⛶</button>
+        <!-- Fullscreen Button -->
+        <button id="fullscreen-btn" aria-label="Toggle fullscreen">⛶</button>
 
-    <!-- Background Toggle Button -->
-    <button id="bg-toggle-btn" title="Toggle Night Mode">🌙</button>
+        <!-- Background Toggle Button -->
+        <button id="bg-toggle-btn" title="Toggle Night Mode">🌙</button>
 
-    <!-- Chat Container -->
-    <div id="chat-container">
-        <div id="chat-header">
-            <span id="chat-title">Rina-chan</span>
-            <div class="header-controls">
-                <button id="memory-btn" aria-label="View memory stats" title="Memory Info">💭</button>
-                <div class="nsfw-toggle-container">
-                    <span class="nsfw-toggle-label">NSFW</span>
-                    <button class="toggle-switch" id="nsfw-toggle" aria-label="Toggle NSFW mode"></button>
-                </div>
-                <!-- DEBUG: Mood display toggle (remove for production) -->
-                <button id="mood-debug-toggle" title="Toggle mood debug" style="margin-left:8px">🐞</button>
-            </div>
-        </div>
-        <div id="chat-messages"></div>
-        <div id="chat-input-container">
-            <input id="chat-input" type="text" placeholder="Say something to Rina-chan..." />
-            <button id="send-btn">Send</button>
-        </div>
-    </div>
-
-    <!-- Memory Modal -->
-    <div id="memory-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Rina-chan's Memories 💭</h2>
-                <div style="display:flex;gap:8px;align-items:center;">
-                    <button id="memory-clear-btn" title="Clear all memories">🧹 Clear</button>
-                    <button class="modal-close" id="memory-close">&times;</button>
+        <!-- Chat Container -->
+        <div id="chat-container">
+            <div id="chat-header">
+                <span id="chat-title">Rina-chan</span>
+                <div class="header-controls">
+                    <button
+                        id="memory-btn"
+                        aria-label="View memory stats"
+                        title="Memory Info"
+                    >
+                        💭
+                    </button>
+                    <div class="nsfw-toggle-container">
+                        <span class="nsfw-toggle-label">NSFW</span>
+                        <button
+                            class="toggle-switch"
+                            id="nsfw-toggle"
+                            aria-label="Toggle NSFW mode"
+                        ></button>
+                    </div>
+                    <!-- DEBUG: Mood display toggle (remove for production) -->
+                    <button id="mood-debug-toggle" title="Toggle mood debug">
+                        🐞
+                    </button>
                 </div>
             </div>
-            <div class="modal-body">
-                <div id="memory-stats"></div>
-                <div id="memory-details"></div>
+            <div id="chat-messages"></div>
+            <div id="chat-input-container">
+                <input
+                    id="chat-input"
+                    type="text"
+                    placeholder="Say something to Rina-chan..."
+                />
+                <button id="send-btn">Send</button>
             </div>
         </div>
-    </div>
 
-    <!-- All local now -->
-    <script src="js/pixi.min.js"></script>
-    <script>
-        window.PIXI = PIXI;  // Still needed
-        console.log('PixiJS loaded locally');
-    </script>
+        <!-- Memory Modal -->
+        <div id="memory-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Rina-chan's Memories 💭</h2>
+                    <div class="modal-header-actions">
+                        <button
+                            id="memory-clear-btn"
+                            title="Clear all memories"
+                        >
+                            🧹 Clear
+                        </button>
+                        <button class="modal-close" id="memory-close">
+                            &times;
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-body">
+                    <div id="memory-stats"></div>
+                    <div id="memory-details"></div>
+                </div>
+            </div>
+        </div>
 
-    <script src="js/live2dcubismcore.min.js"></script>
+        <!-- All local now -->
+        <script src="js/pixi.min.js"></script>
+        <script>
+            window.PIXI = PIXI; // Still needed
+            console.log("PixiJS loaded locally");
+        </script>
 
-    <script src="js/cubism4.min.js"></script>
+        <script src="js/live2dcubismcore.min.js"></script>
 
-    <div id="chat-history"></div>
-    <pre id="full-history-json" style="display:none"></pre>
+        <script src="js/cubism4.min.js"></script>
 
-    <script>
-        // Backend API Configuration (using relative URL for same origin)
-        const API_BASE_URL = '';
+        <div id="chat-history"></div>
+        <pre id="full-history-json" style="display: none"></pre>
 
-        // ===== CHAT SYSTEM =====
-        const chatMessages = document.getElementById('chat-messages');
-        const chatInput = document.getElementById('chat-input');
-        const sendBtn = document.getElementById('send-btn');
-        const nsfwToggle = document.getElementById('nsfw-toggle');
-        let nsfwMode = false;
-        let isWaitingForResponse = false;
+        <script>
+            // Backend API Configuration (using relative URL for same origin)
+            const API_BASE_URL = "";
 
-        // Initialize NSFW toggle
-        nsfwToggle.addEventListener('click', () => {
-            nsfwMode = !nsfwMode;
-            nsfwToggle.classList.toggle('active');
-            addBotMessage(nsfwMode ? "Hehe... you activated something interesting~" : "Back to normal mode!");
-        });
+            // ===== CHAT SYSTEM =====
+            const chatMessages = document.getElementById("chat-messages");
+            const chatInput = document.getElementById("chat-input");
+            const sendBtn = document.getElementById("send-btn");
+            const nsfwToggle = document.getElementById("nsfw-toggle");
+            let nsfwMode = false;
+            let isWaitingForResponse = false;
 
-        // Send message on Enter key
-        chatInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && !isWaitingForResponse) {
-                sendMessage();
+            // Initialize NSFW toggle
+            nsfwToggle.addEventListener("click", () => {
+                nsfwMode = !nsfwMode;
+                nsfwToggle.classList.toggle("active");
+                addBotMessage(
+                    nsfwMode
+                        ? "Hehe... you activated something interesting~"
+                        : "Back to normal mode!",
+                );
+            });
+
+            // Send message on Enter key
+            chatInput.addEventListener("keypress", (e) => {
+                if (e.key === "Enter" && !isWaitingForResponse) {
+                    sendMessage();
+                }
+            });
+
+            sendBtn.addEventListener("click", () => {
+                if (!isWaitingForResponse) {
+                    sendMessage();
+                }
+            });
+
+            function addUserMessage(text) {
+                const messageEl = document.createElement("div");
+                messageEl.className = "message user";
+                messageEl.innerHTML = `<div class="message-content">${escapeHtml(text)}</div>`;
+                chatMessages.appendChild(messageEl);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
             }
-        });
 
-        sendBtn.addEventListener('click', () => {
-            if (!isWaitingForResponse) {
-                sendMessage();
+            function addBotMessage(text) {
+                const messageEl = document.createElement("div");
+                messageEl.className = "message bot";
+                messageEl.innerHTML = `<div class="message-content">${escapeHtml(text)}</div>`;
+                chatMessages.appendChild(messageEl);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
             }
-        });
 
-        function addUserMessage(text) {
-            const messageEl = document.createElement('div');
-            messageEl.className = 'message user';
-            messageEl.innerHTML = `<div class="message-content">${escapeHtml(text)}</div>`;
-            chatMessages.appendChild(messageEl);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-
-        function addBotMessage(text) {
-            const messageEl = document.createElement('div');
-            messageEl.className = 'message bot';
-            messageEl.innerHTML = `<div class="message-content">${escapeHtml(text)}</div>`;
-            chatMessages.appendChild(messageEl);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-
-        function showTypingIndicator() {
-            const messageEl = document.createElement('div');
-            messageEl.className = 'message bot';
-            messageEl.id = 'typing-indicator';
-            messageEl.innerHTML = `
+            function showTypingIndicator() {
+                const messageEl = document.createElement("div");
+                messageEl.className = "message bot";
+                messageEl.id = "typing-indicator";
+                messageEl.innerHTML = `
                 <div class="typing-indicator">
                     <div class="typing-dot"></div>
                     <div class="typing-dot"></div>
                     <div class="typing-dot"></div>
                 </div>
             `;
-            chatMessages.appendChild(messageEl);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-
-        function removeTypingIndicator() {
-            const indicator = document.getElementById('typing-indicator');
-            if (indicator) {
-                indicator.remove();
+                chatMessages.appendChild(messageEl);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
             }
-        }
+
+            function removeTypingIndicator() {
+                const indicator = document.getElementById("typing-indicator");
+                if (indicator) {
+                    indicator.remove();
+                }
+            }
 
             // Clear memory button handler (with confirmation)
-            const memoryClearBtn = document.getElementById('memory-clear-btn');
-            memoryClearBtn.addEventListener('click', async () => {
-                const ok = confirm('Are you sure you want to clear all saved memories and chat history? This cannot be undone.');
+            const memoryClearBtn = document.getElementById("memory-clear-btn");
+            memoryClearBtn.addEventListener("click", async () => {
+                const ok = confirm(
+                    "Are you sure you want to clear all saved memories and chat history? This cannot be undone.",
+                );
                 if (!ok) return;
 
                 try {
                     memoryClearBtn.disabled = true;
-                    const res = await fetch('/memory/clear', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({})
+                    const res = await fetch("/memory/clear", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({}),
                     });
                     const data = await res.json();
                     if (data && data.success) {
                         // Clear UI history and reload stats
-                        const fullElem = document.getElementById('full-history-json');
-                        if (fullElem) fullElem.textContent = '';
-                        chatMessages.innerHTML = '';
-                        addBotMessage('All memories cleared. I will start fresh.');
+                        const fullElem =
+                            document.getElementById("full-history-json");
+                        if (fullElem) fullElem.textContent = "";
+                        chatMessages.innerHTML = "";
+                        addBotMessage(
+                            "All memories cleared. I will start fresh.",
+                        );
                         await loadMemoryStats();
                     } else {
-                        console.error('Failed to clear memory:', data);
-                        alert('Failed to clear memory. See console for details.');
+                        console.error("Failed to clear memory:", data);
+                        alert(
+                            "Failed to clear memory. See console for details.",
+                        );
                     }
                 } catch (err) {
-                    console.error('Error clearing memory:', err);
-                    alert('Error while clearing memory. See console.');
+                    console.error("Error clearing memory:", err);
+                    alert("Error while clearing memory. See console.");
                 } finally {
                     memoryClearBtn.disabled = false;
                 }
             });
 
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        // DEBUG: Mood debug UI (visible tag) - REMOVE FOR PRODUCTION
-        // Toggling this shows the hidden mood tags in the UI to help map model expressions.
-        const moodDebugToggleBtn = document.getElementById('mood-debug-toggle');
-        let moodDebug = localStorage.getItem('moodDebug') === 'true';
-
-        // Create a small badge to show the current mood when debug is enabled
-        const moodBadge = document.createElement('div');
-        moodBadge.id = 'mood-debug-badge';
-        moodBadge.style.cssText = 'position:fixed;right:16px;bottom:120px;background:rgba(0,0,0,0.6);color:#fff;padding:6px 10px;border-radius:10px;font-size:14px;display:none;z-index:9999;';
-        document.body.appendChild(moodBadge);
-
-        function updateMoodBadgeVisibility() {
-            moodBadge.style.display = moodDebug ? 'block' : 'none';
-            moodDebugToggleBtn.classList.toggle('active', moodDebug);
-        }
-
-        moodDebugToggleBtn.addEventListener('click', () => {
-            moodDebug = !moodDebug;
-            localStorage.setItem('moodDebug', moodDebug ? 'true' : 'false');
-            updateMoodBadgeVisibility();
-        });
-
-        function showMoodDebug(mood) {
-            // Only show if debug enabled
-            if (!moodDebug || !mood) return;
-            moodBadge.textContent = `Mood: ${mood}`;
-            // Keep it visible for a short time to help mapping
-            moodBadge.style.opacity = '1';
-            setTimeout(() => {
-                moodBadge.style.opacity = '0.9';
-            }, 250);
-        }
-
-        updateMoodBadgeVisibility();
-
-        // Initial load: restore chat history and memory stats, then greet if empty
-        async function loadChatHistory() {
-            try {
-                const response = await fetch('/memory/history');
-                if (!response.ok) return false;
-                const data = await response.json();
-
-                // Full history preserved in hidden element (JSON)
-                const fullHistory = Array.isArray(data.history) ? data.history : [];
-                const fullElem = document.getElementById('full-history-json');
-                if (fullElem) fullElem.textContent = JSON.stringify(fullHistory, null, 2);
-
-                // Render only messages from Ren (Discord ID)
-                const USER_FILTER_ID = '310686182491160576';
-                const filtered = fullHistory
-                    .filter(h => String(h.user_id) === USER_FILTER_ID && (h.user_message || '').trim())
-                    .slice()
-                    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-
-                chatMessages.innerHTML = '';
-                for (const entry of filtered) {
-                    addUserMessage(entry.user_message || '');
-                    if (entry.bot_response) addBotMessage(entry.bot_response);
-                }
-
-                return filtered.length > 0;
-            } catch (err) {
-                console.error('Failed to load chat history:', err);
+            function escapeHtml(text) {
+                const div = document.createElement("div");
+                div.textContent = text;
+                return div.innerHTML;
             }
-            return false;
-        }
 
-        window.addEventListener('load', async () => {
-            try {
-                const hadHistory = await loadChatHistory();
-                await loadMemoryStats();
-                if (!hadHistory) {
+            // DEBUG: Mood debug UI (visible tag) - REMOVE FOR PRODUCTION
+            // Toggling this shows the hidden mood tags in the UI to help map model expressions.
+            const moodDebugToggleBtn =
+                document.getElementById("mood-debug-toggle");
+            let moodDebug = localStorage.getItem("moodDebug") === "true";
+
+            // Create a small badge to show the current mood when debug is enabled
+            const moodBadge = document.createElement("div");
+            moodBadge.id = "mood-debug-badge";
+            moodBadge.style.display = "none";
+            document.body.appendChild(moodBadge);
+
+            function updateMoodBadgeVisibility() {
+                moodBadge.style.display = moodDebug ? "block" : "none";
+                moodDebugToggleBtn.classList.toggle("active", moodDebug);
+            }
+
+            moodDebugToggleBtn.addEventListener("click", () => {
+                moodDebug = !moodDebug;
+                localStorage.setItem("moodDebug", moodDebug ? "true" : "false");
+                updateMoodBadgeVisibility();
+            });
+
+            function showMoodDebug(mood) {
+                // Only show if debug enabled
+                if (!moodDebug || !mood) return;
+                moodBadge.textContent = `Mood: ${mood}`;
+                // Keep it visible for a short time to help mapping
+                moodBadge.style.opacity = "1";
+                setTimeout(() => {
+                    moodBadge.style.opacity = "0.9";
+                }, 250);
+            }
+
+            updateMoodBadgeVisibility();
+
+            // Initial load: restore chat history and memory stats, then greet if empty
+            async function loadChatHistory() {
+                try {
+                    const response = await fetch("/memory/history");
+                    if (!response.ok) return false;
+                    const data = await response.json();
+
+                    // Full history preserved in hidden element (JSON)
+                    const fullHistory = Array.isArray(data.history)
+                        ? data.history
+                        : [];
+                    const fullElem =
+                        document.getElementById("full-history-json");
+                    if (fullElem)
+                        fullElem.textContent = JSON.stringify(
+                            fullHistory,
+                            null,
+                            2,
+                        );
+
+                    // Render only messages from Ren (Discord ID)
+                    const USER_FILTER_ID = "310686182491160576";
+                    const filtered = fullHistory
+                        .filter(
+                            (h) =>
+                                String(h.user_id) === USER_FILTER_ID &&
+                                (h.user_message || "").trim(),
+                        )
+                        .slice()
+                        .sort(
+                            (a, b) =>
+                                new Date(a.timestamp) - new Date(b.timestamp),
+                        );
+
+                    chatMessages.innerHTML = "";
+                    for (const entry of filtered) {
+                        addUserMessage(entry.user_message || "");
+                        if (entry.bot_response)
+                            addBotMessage(entry.bot_response);
+                    }
+
+                    return filtered.length > 0;
+                } catch (err) {
+                    console.error("Failed to load chat history:", err);
+                }
+                return false;
+            }
+
+            window.addEventListener("load", async () => {
+                try {
+                    const hadHistory = await loadChatHistory();
+                    await loadMemoryStats();
+                    if (!hadHistory) {
+                        setTimeout(() => {
+                            addBotMessage(
+                                "Hi there! I'm Rina-chan. What's on your mind? 💕",
+                            );
+                        }, 500);
+                    }
+                } catch (e) {
+                    console.error("Startup load error:", e);
                     setTimeout(() => {
-                        addBotMessage("Hi there! I'm Rina-chan. What's on your mind? 💕");
+                        addBotMessage(
+                            "Hi there! I'm Rina-chan. What's on your mind? 💕",
+                        );
                     }, 500);
                 }
-            } catch (e) {
-                console.error('Startup load error:', e);
-                setTimeout(() => {
-                    addBotMessage("Hi there! I'm Rina-chan. What's on your mind? 💕");
-                }, 500);
-            }
-        });
+            });
 
-        let lastExpressionTimer = null;
-        let currentExpression = 'neutral'; // Default is now neutral
+            let lastExpressionTimer = null;
+            let currentExpression = "neutral"; // Default is now neutral
 
-        // ===== MEMORY SYSTEM =====
-        const memoryBtn = document.getElementById('memory-btn');
-        const memoryModal = document.getElementById('memory-modal');
-        const memoryClose = document.getElementById('memory-close');
+            // ===== MEMORY SYSTEM =====
+            const memoryBtn = document.getElementById("memory-btn");
+            const memoryModal = document.getElementById("memory-modal");
+            const memoryClose = document.getElementById("memory-close");
 
-        memoryBtn.addEventListener('click', () => {
-            memoryModal.style.display = 'block';
-            loadMemoryStats();
-        });
+            memoryBtn.addEventListener("click", () => {
+                memoryModal.style.display = "block";
+                loadMemoryStats();
+            });
 
-        memoryClose.addEventListener('click', () => {
-            memoryModal.style.display = 'none';
-        });
+            memoryClose.addEventListener("click", () => {
+                memoryModal.style.display = "none";
+            });
 
-        window.addEventListener('click', (e) => {
-            if (e.target === memoryModal) {
-                memoryModal.style.display = 'none';
-            }
-        });
+            window.addEventListener("click", (e) => {
+                if (e.target === memoryModal) {
+                    memoryModal.style.display = "none";
+                }
+            });
 
-        async function loadMemoryStats() {
-            try {
-                const response = await fetch('/memory/stats');
-                const data = await response.json();
+            async function loadMemoryStats() {
+                try {
+                    const response = await fetch("/memory/stats");
+                    const data = await response.json();
 
-                if (data.success) {
-                    const stats = data.stats;
-                    const statsDiv = document.getElementById('memory-stats');
-                    const detailsDiv = document.getElementById('memory-details');
+                    if (data.success) {
+                        const stats = data.stats;
+                        const statsDiv =
+                            document.getElementById("memory-stats");
+                        const detailsDiv =
+                            document.getElementById("memory-details");
 
-                    // Create relationship bar
-                    const relLevel = stats.relationship_level || 0;
-                    const relBarFill = Math.min(relLevel, 100);
-                    
-                    statsDiv.innerHTML = `
+                        // Create relationship bar
+                        const relLevel = stats.relationship_level || 0;
+                        const relBarFill = Math.min(relLevel, 100);
+
+                        statsDiv.innerHTML = `
                         <div class="memory-section">
                             <h3>👤 About You</h3>
                             <div class="memory-stat">
@@ -316,7 +373,7 @@
                                 <span class="value">${relLevel}/100 intimacy</span>
                             </div>
                         </div>
-                        
+
                         <div class="memory-section">
                             <h3>📊 Statistics</h3>
                             <div class="memory-stat">
@@ -342,34 +399,45 @@
                         </div>
                     `;
 
-                    // Show Rina's conclusions
-                    if (stats.personality_traits && stats.personality_traits.length > 0) {
-                        statsDiv.innerHTML += `
+                        // Show Rina's conclusions
+                        if (
+                            stats.personality_traits &&
+                            stats.personality_traits.length > 0
+                        ) {
+                            statsDiv.innerHTML += `
                             <div class="memory-section">
                                 <h3>✨ Rina's Observations</h3>
                                 <div class="memory-stat">
                                     <span class="label">Personality Traits I've noticed:</span>
-                                    <span class="value">${stats.personality_traits.join(', ')}</span>
+                                    <span class="value">${stats.personality_traits.join(", ")}</span>
                                 </div>
                             </div>
                         `;
-                    }
-
-                    // Show Rina's personal thoughts
-                    if (stats.rina_conclusions && Object.keys(stats.rina_conclusions).length > 0) {
-                        let conclusionsHtml = '<div class="memory-section"><h3>💭 What I Think About You</h3>';
-                        
-                        for (const [key, value] of Object.entries(stats.rina_conclusions)) {
-                            conclusionsHtml += `<div class="rina-thought">"${escapeHtml(value)}"</div>`;
                         }
-                        
-                        conclusionsHtml += '</div>';
-                        statsDiv.innerHTML += conclusionsHtml;
-                    }
 
-                    if (stats.last_conversation) {
-                        const lastDate = new Date(stats.last_conversation).toLocaleDateString();
-                        statsDiv.innerHTML += `
+                        // Show Rina's personal thoughts
+                        if (
+                            stats.rina_conclusions &&
+                            Object.keys(stats.rina_conclusions).length > 0
+                        ) {
+                            let conclusionsHtml =
+                                '<div class="memory-section"><h3>💭 What I Think About You</h3>';
+
+                            for (const [key, value] of Object.entries(
+                                stats.rina_conclusions,
+                            )) {
+                                conclusionsHtml += `<div class="rina-thought">"${escapeHtml(value)}"</div>`;
+                            }
+
+                            conclusionsHtml += "</div>";
+                            statsDiv.innerHTML += conclusionsHtml;
+                        }
+
+                        if (stats.last_conversation) {
+                            const lastDate = new Date(
+                                stats.last_conversation,
+                            ).toLocaleDateString();
+                            statsDiv.innerHTML += `
                             <div class="memory-section">
                                 <h3>⏰ Timeline</h3>
                                 <div class="memory-stat">
@@ -378,380 +446,516 @@
                                 </div>
                             </div>
                         `;
-                    }
-                }
-            } catch (error) {
-                console.error('Error loading memory:', error);
-            }
-        }
-
-        // ===== FULLSCREEN BUTTON =====
-        const fullscreenBtn = document.getElementById('fullscreen-btn');
-        
-        fullscreenBtn.addEventListener('click', () => {
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen().catch(err => {
-                    console.log(`Error attempting to enable fullscreen: ${err.message}`);
-                });
-            } else {
-                document.exitFullscreen();
-            }
-        });
-
-        // Update button text when fullscreen state changes
-        document.addEventListener('fullscreenchange', () => {
-            fullscreenBtn.textContent = document.fullscreenElement ? '⛶' : '⛶';
-        });
-
-        // ===== BACKGROUND TOGGLE BUTTON =====
-        const bgToggleBtn = document.getElementById('bg-toggle-btn');
-        const body = document.body;
-
-        let nightMode = localStorage.getItem('nightMode') === 'true';
-
-        function applyNightMode() {
-            body.classList.toggle('night-mode', nightMode);
-            bgToggleBtn.textContent = nightMode ? '☀️' : '🌙';
-        }
-
-        applyNightMode();
-
-        bgToggleBtn.addEventListener('click', () => {
-            nightMode = !nightMode;
-            localStorage.setItem('nightMode', nightMode);
-            applyNightMode();
-        });
-
-        // ===== LIVE2D SYSTEM =====
-        (async function main() {
-            console.log('Live2D plugin loaded:', !!PIXI.live2d);
-
-            if (!PIXI.live2d) {
-                alert('Live2D plugin not loaded – check file paths and console.');
-                return;
-            }
-
-            const app = new PIXI.Application({
-                view: document.getElementById('canvas'),
-                autoStart: true,
-                resizeTo: window,
-                backgroundAlpha: 0
-            });
-
-            const modelPath = './KITU_RE23/KITU_RE23.model3.json';
-
-            function centerModel(model, app) {
-                model.x = app.renderer.width / 2;
-                model.y = app.renderer.height / 2 + 250;
-            }
-
-            try {
-                console.log('Loading model from:', modelPath);
-                const model = await PIXI.live2d.Live2DModel.from(modelPath);
-
-                app.stage.addChild(model);
-
-                model.scale.set(0.2);
-                model.anchor.set(0.5, 0.5);
-                centerModel(model, app);
-
-                if (model.motionManager) {
-                    model.motionManager.startRandomMotion('Idle', 3);
-                }
-
-                // Ensure the model does NOT follow the mouse pointer.
-                // Aggressively disable any pointer-follow behavior from plugins or global handlers.
-                try {
-                    // Disable PIXI interaction on the model and stage
-                    model.interactive = false;
-                    model.interactiveChildren = false;
-                    app.stage.interactive = false;
-                    app.stage.interactiveChildren = false;
-
-                    // Remove common listeners that some plugins attach to the model instance
-                    try { if (typeof model.removeAllListeners === 'function') { model.removeAllListeners(); } } catch(e){}
-
-                    // Remove any global pointer/mouse listeners that might drive the model
-                    const pointerEvents = ['pointermove','mousemove','pointerover','pointerout','pointerenter','pointerleave','pointerdown','pointerup'];
-                    for (const ev of pointerEvents) {
-                        try { window.removeEventListener(ev, window._live2d_pointer_handler, { passive: true }); } catch(e){}
-                        try { document.removeEventListener(ev, window._live2d_pointer_handler, { passive: true }); } catch(e){}
-                        try { window[ev] = null; } catch(e){}
-                        try { document[ev] = null; } catch(e){}
-                    }
-
-                    // As a final and reliable fallback: override the model.focus method (used by many demos)
-                    if (typeof model.focus === 'function') {
-                        model.focus = function() { /* no-op to prevent mouse look */ };
-                    }
-
-                    // NOTE: Removed parameter blocking wrapper to allow natural blinking animation.
-                    // The model's eye blink animation uses ParamEyeLOpen/ParamEyeROpen.
-                    // Pointer events on canvas are disabled, so no mouse-follow interference occurs.
-
-                    // Prevent pointer events on canvas element as additional safety
-                    const canvasEl = document.getElementById('canvas');
-                    if (canvasEl) canvasEl.style.pointerEvents = 'none';
-                } catch (e) {
-                    console.debug('Failed to fully disable pointer interactions for model', e);
-                }
-
-                // Add resize listener BEFORE adding to stage
-                window.addEventListener('resize', () => {
-                    centerModel(model, app);
-                });
-
-                // Also add app resize listener for immediate updates
-                app.renderer.on('resize', () => {
-                    centerModel(model, app);
-                });
-
-                console.log('Model loaded successfully – fully local!');
-                // Expose model globally so other UI code can control expressions
-                window.rinaModel = model;
-                currentExpression = 'neutral'; // Set initial expression to neutral
-
-                // Apply neutral expression immediately on load
-                setTimeout(() => {
-                    returnToNeutralExpression();
-                }, 1000);
-
-                // Load expression templates included in the model folder (files named (Exp)... .exp3.json)
-                (async function loadExpressionTemplates() {
-                    const exprFiles = [
-                        '(Exp)Happy.exp3.json',
-                        '(Exp)Angry.exp3.json',
-                        '(Exp)Sad.exp3.json',
-                        '(Exp)OOFace.exp3.json',
-                        '(Exp)Sweat.exp3.json',
-                        '(Exp)doya.exp3.json',
-                        '(Exp)Frightened.exp3.json',
-                        '(Exp)@@.exp3.json',
-                        '(Exp)Hair Change.exp3.json',
-                        '(Exp)OutFit Change.exp3.json',
-                        '(Exp)Neutral.exp3.json'   // ← Neutral expression added
-                    ];
-
-                    window.rinaExpressions = {};
-
-                    for (const fname of exprFiles) {
-                        try {
-                            const url = `./KITU_RE23/${encodeURIComponent(fname)}`.replace(/%28/g, '(').replace(/%29/g, ')');
-                            const res = await fetch(url);
-                            if (!res.ok) continue;
-                            const json = await res.json();
-                            // Normalize key name: strip (Exp) prefix and extension
-                            let key = fname.replace(/\(Exp\)/i, '').replace(/\.exp3\.json$/i, '').trim().toLowerCase();
-                            // store parameters array for later application
-                            if (json && Array.isArray(json.Parameters)) {
-                                window.rinaExpressions[key] = json.Parameters;
-                            }
-                        } catch (e) {
-                            // ignore missing files
                         }
                     }
-                    console.log('Loaded expression templates:', Object.keys(window.rinaExpressions));
-                })();
-            } catch (err) {
-                console.error('Error:', err);
-                alert('Model failed to load – check console (path/files?).');
-            }
-        })();
-
-        // Map a semantic mood string to one of the loaded expression template keys.
-        // Uses only (Exp) templates; neutral is default/normal.
-        function mapMoodToExpressionKey(mood) {
-            if (!mood) return 'neutral';
-            const m = (mood || '').toLowerCase().trim();
-
-            const pickAvailable = (candidates) => {
-                if (!window.rinaExpressions) return null;
-                for (const c of candidates) {
-                    if (c && window.rinaExpressions[c]) return c;
+                } catch (error) {
+                    console.error("Error loading memory:", error);
                 }
-                return null;
-            };
-
-            // Neutral (explicit or fallback)
-            if (m === 'neutral' || m === '') return pickAvailable(['neutral']);
-
-            // Happy : happy, joyful, excited, calm, content, playful
-            if (m.includes('happy') || m.includes('joyful') || m.includes('excited') || 
-                m.includes('calm') || m.includes('content') || m.includes('playful')) {
-                return pickAvailable(['happy']);
             }
 
-            // @@ : embarrassed, flustered, dizzy, horny
-            if (m.includes('embarassed') || m.includes('flustered') || m.includes('dizzy') || m.includes('horny')) {
-                return pickAvailable(['@@']);
-            }
+            // ===== FULLSCREEN BUTTON =====
+            const fullscreenBtn = document.getElementById("fullscreen-btn");
 
-            // OO (OOFace): surprised, shocked, puzzled, confused
-            if (m.includes('suprised') || m.includes('surprised') || m.includes('shocked') || 
-                m.includes('puzzled') || m.includes('confused')) {
-                return pickAvailable(['ooface']);
-            }
-
-            // Angry: angry, upset, mad, furious
-            if (m.includes('angry') || m.includes('upset') || m.includes('mad') || m.includes('furious')) {
-                return pickAvailable(['angry']);
-            }
-
-            // Sad: sad, depressed
-            if (m.includes('sad') || m.includes('depressed')) {
-                return pickAvailable(['sad']);
-            }
-
-            // Frightened: frightened, scared, terrified
-            if (m.includes('fright') || m.includes('scared') || m.includes('terrified')) {
-                return pickAvailable(['frightened']);
-            }
-
-            // Sweat: nervous, anxious, worried
-            if (m.includes('nerveous') || m.includes('nervous') || m.includes('anxious') || 
-                m.includes('worried') || m.includes('sweat')) {
-                return pickAvailable(['sweat']);
-            }
-
-            // Doya: smug, proud
-            if (m.includes('doya') || m.includes('smug') || m.includes('proud')) {
-                return pickAvailable(['doya']);
-            }
-
-            const exact = m.replace(/\s+/g, '').toLowerCase();
-            if (window.rinaExpressions && window.rinaExpressions[exact]) return exact;
-
-            return pickAvailable(['neutral']);
-        }
-
-        // Helper function to apply a specific expression template
-        function applyExpressionTemplate(expressionKey) {
-            const m = window.rinaModel;
-            if (!m || !window.rinaExpressions || !window.rinaExpressions[expressionKey]) return;
-
-            try {
-                const params = window.rinaExpressions[expressionKey];
-                if (m.internalModel && m.internalModel.coreModel && typeof m.internalModel.coreModel.setParameterValueById === 'function') {
-                    const core = m.internalModel.coreModel;
-                    for (const p of params) {
-                        if (p && p.Id) core.setParameterValueById(p.Id, p.Value);
-                    }
-                    console.log(`Applied expression: ${expressionKey}`);
+            fullscreenBtn.addEventListener("click", () => {
+                if (!document.fullscreenElement) {
+                    document.documentElement
+                        .requestFullscreen()
+                        .catch((err) => {
+                            console.log(
+                                `Error attempting to enable fullscreen: ${err.message}`,
+                            );
+                        });
+                } else {
+                    document.exitFullscreen();
                 }
-            } catch (e) {
-                console.debug('Failed to apply expression template', e);
-            }
-        }
+            });
 
-        // Return model to default "neutral" expression using the (Exp)Neutral template.
-        function returnToNeutralExpression() {
-            if (lastExpressionTimer) {
-                clearTimeout(lastExpressionTimer);
-                lastExpressionTimer = null;
-            }
-            
-            if (currentExpression !== 'neutral') {
-                applyExpressionTemplate('neutral');
-                currentExpression = 'neutral';
-            }
-        }
+            // Update button text when fullscreen state changes
+            document.addEventListener("fullscreenchange", () => {
+                fullscreenBtn.textContent = document.fullscreenElement
+                    ? "⛶"
+                    : "⛶";
+            });
 
-        // Apply a mood to the Live2D model using only the loaded (Exp) templates.
-        // This will prefer mapped templates per your mapping rules and do nothing
-        // if no matching template exists.
-        function applyMoodToModel(mood) {
-            const m = window.rinaModel;
-            if (!m) return;
+            // ===== BACKGROUND TOGGLE BUTTON =====
+            const bgToggleBtn = document.getElementById("bg-toggle-btn");
+            const body = document.body;
 
-            try {
-                const mappedKey = mapMoodToExpressionKey(mood);
-                if (!mappedKey || !window.rinaExpressions[mappedKey]) {
-                    console.log('No expression template for mood:', mood);
+            let nightMode = localStorage.getItem("nightMode") === "true";
+
+            function applyNightMode() {
+                body.classList.toggle("night-mode", nightMode);
+                bgToggleBtn.textContent = nightMode ? "☀️" : "🌙";
+            }
+
+            applyNightMode();
+
+            bgToggleBtn.addEventListener("click", () => {
+                nightMode = !nightMode;
+                localStorage.setItem("nightMode", nightMode);
+                applyNightMode();
+            });
+
+            // ===== LIVE2D SYSTEM =====
+            (async function main() {
+                console.log("Live2D plugin loaded:", !!PIXI.live2d);
+
+                if (!PIXI.live2d) {
+                    alert(
+                        "Live2D plugin not loaded – check file paths and console.",
+                    );
                     return;
                 }
 
-                // If we're already showing this expression, don't reapply it
-                if (currentExpression === mappedKey) return;
+                const app = new PIXI.Application({
+                    view: document.getElementById("canvas"),
+                    autoStart: true,
+                    resizeTo: window,
+                    backgroundAlpha: 0,
+                });
 
-                // Clear any existing timer
+                const modelPath = "./KITU_RE23/KITU_RE23.model3.json";
+
+                function centerModel(model, app) {
+                    const viewportWidth = app.renderer.width;
+                    const viewportHeight = app.renderer.height;
+                    const responsiveScale = Math.max(
+                        0.14,
+                        Math.min(
+                            0.22,
+                            Math.min(
+                                viewportWidth / 1800,
+                                viewportHeight / 1500,
+                            ),
+                        ),
+                    );
+                    const verticalBias =
+                        viewportHeight < 700
+                            ? 0.66
+                            : viewportHeight < 900
+                              ? 0.7
+                              : 0.74;
+
+                    model.scale.set(responsiveScale);
+                    model.x = viewportWidth / 2;
+                    model.y = viewportHeight * verticalBias;
+                }
+
+                try {
+                    console.log("Loading model from:", modelPath);
+                    const model = await PIXI.live2d.Live2DModel.from(modelPath);
+
+                    app.stage.addChild(model);
+
+                    model.anchor.set(0.5, 0.5);
+                    centerModel(model, app);
+
+                    if (model.motionManager) {
+                        model.motionManager.startRandomMotion("Idle", 3);
+                    }
+
+                    // Ensure the model does NOT follow the mouse pointer.
+                    // Aggressively disable any pointer-follow behavior from plugins or global handlers.
+                    try {
+                        // Disable PIXI interaction on the model and stage
+                        model.interactive = false;
+                        model.interactiveChildren = false;
+                        app.stage.interactive = false;
+                        app.stage.interactiveChildren = false;
+
+                        // Remove common listeners that some plugins attach to the model instance
+                        try {
+                            if (
+                                typeof model.removeAllListeners === "function"
+                            ) {
+                                model.removeAllListeners();
+                            }
+                        } catch (e) {}
+
+                        // Remove any global pointer/mouse listeners that might drive the model
+                        const pointerEvents = [
+                            "pointermove",
+                            "mousemove",
+                            "pointerover",
+                            "pointerout",
+                            "pointerenter",
+                            "pointerleave",
+                            "pointerdown",
+                            "pointerup",
+                        ];
+                        for (const ev of pointerEvents) {
+                            try {
+                                window.removeEventListener(
+                                    ev,
+                                    window._live2d_pointer_handler,
+                                    { passive: true },
+                                );
+                            } catch (e) {}
+                            try {
+                                document.removeEventListener(
+                                    ev,
+                                    window._live2d_pointer_handler,
+                                    { passive: true },
+                                );
+                            } catch (e) {}
+                            try {
+                                window[ev] = null;
+                            } catch (e) {}
+                            try {
+                                document[ev] = null;
+                            } catch (e) {}
+                        }
+
+                        // As a final and reliable fallback: override the model.focus method (used by many demos)
+                        if (typeof model.focus === "function") {
+                            model.focus = function () {
+                                /* no-op to prevent mouse look */
+                            };
+                        }
+
+                        // NOTE: Removed parameter blocking wrapper to allow natural blinking animation.
+                        // The model's eye blink animation uses ParamEyeLOpen/ParamEyeROpen.
+                        // Pointer events on canvas are disabled, so no mouse-follow interference occurs.
+
+                        // Prevent pointer events on canvas element as additional safety
+                        const canvasEl = document.getElementById("canvas");
+                        if (canvasEl) canvasEl.style.pointerEvents = "none";
+                    } catch (e) {
+                        console.debug(
+                            "Failed to fully disable pointer interactions for model",
+                            e,
+                        );
+                    }
+
+                    // Add resize listener BEFORE adding to stage
+                    window.addEventListener("resize", () => {
+                        centerModel(model, app);
+                    });
+
+                    // Also add app resize listener for immediate updates
+                    app.renderer.on("resize", () => {
+                        centerModel(model, app);
+                    });
+
+                    console.log("Model loaded successfully – fully local!");
+                    // Expose model globally so other UI code can control expressions
+                    window.rinaModel = model;
+                    currentExpression = "neutral"; // Set initial expression to neutral
+
+                    // Apply neutral expression immediately on load
+                    setTimeout(() => {
+                        returnToNeutralExpression();
+                    }, 1000);
+
+                    // Load expression templates included in the model folder (files named (Exp)... .exp3.json)
+                    (async function loadExpressionTemplates() {
+                        const exprFiles = [
+                            "(Exp)Happy.exp3.json",
+                            "(Exp)Angry.exp3.json",
+                            "(Exp)Sad.exp3.json",
+                            "(Exp)OOFace.exp3.json",
+                            "(Exp)Sweat.exp3.json",
+                            "(Exp)doya.exp3.json",
+                            "(Exp)Frightened.exp3.json",
+                            "(Exp)@@.exp3.json",
+                            "(Exp)Hair Change.exp3.json",
+                            "(Exp)OutFit Change.exp3.json",
+                            "(Exp)Neutral.exp3.json", // ← Neutral expression added
+                        ];
+
+                        window.rinaExpressions = {};
+
+                        for (const fname of exprFiles) {
+                            try {
+                                const url =
+                                    `./KITU_RE23/${encodeURIComponent(fname)}`
+                                        .replace(/%28/g, "(")
+                                        .replace(/%29/g, ")");
+                                const res = await fetch(url);
+                                if (!res.ok) continue;
+                                const json = await res.json();
+                                // Normalize key name: strip (Exp) prefix and extension
+                                let key = fname
+                                    .replace(/\(Exp\)/i, "")
+                                    .replace(/\.exp3\.json$/i, "")
+                                    .trim()
+                                    .toLowerCase();
+                                // store parameters array for later application
+                                if (json && Array.isArray(json.Parameters)) {
+                                    window.rinaExpressions[key] =
+                                        json.Parameters;
+                                }
+                            } catch (e) {
+                                // ignore missing files
+                            }
+                        }
+                        console.log(
+                            "Loaded expression templates:",
+                            Object.keys(window.rinaExpressions),
+                        );
+                    })();
+                } catch (err) {
+                    console.error("Error:", err);
+                    alert(
+                        "Model failed to load – check console (path/files?).",
+                    );
+                }
+            })();
+
+            // Map a semantic mood string to one of the loaded expression template keys.
+            // Uses only (Exp) templates; neutral is default/normal.
+            function mapMoodToExpressionKey(mood) {
+                if (!mood) return "neutral";
+                const m = (mood || "").toLowerCase().trim();
+
+                const pickAvailable = (candidates) => {
+                    if (!window.rinaExpressions) return null;
+                    for (const c of candidates) {
+                        if (c && window.rinaExpressions[c]) return c;
+                    }
+                    return null;
+                };
+
+                // Neutral (explicit or fallback)
+                if (m === "neutral" || m === "")
+                    return pickAvailable(["neutral"]);
+
+                // Happy : happy, joyful, excited, calm, content, playful
+                if (
+                    m.includes("happy") ||
+                    m.includes("joyful") ||
+                    m.includes("excited") ||
+                    m.includes("calm") ||
+                    m.includes("content") ||
+                    m.includes("playful")
+                ) {
+                    return pickAvailable(["happy"]);
+                }
+
+                // @@ : embarrassed, flustered, dizzy, horny
+                if (
+                    m.includes("embarassed") ||
+                    m.includes("flustered") ||
+                    m.includes("dizzy") ||
+                    m.includes("horny")
+                ) {
+                    return pickAvailable(["@@"]);
+                }
+
+                // OO (OOFace): surprised, shocked, puzzled, confused
+                if (
+                    m.includes("suprised") ||
+                    m.includes("surprised") ||
+                    m.includes("shocked") ||
+                    m.includes("puzzled") ||
+                    m.includes("confused")
+                ) {
+                    return pickAvailable(["ooface"]);
+                }
+
+                // Angry: angry, upset, mad, furious
+                if (
+                    m.includes("angry") ||
+                    m.includes("upset") ||
+                    m.includes("mad") ||
+                    m.includes("furious")
+                ) {
+                    return pickAvailable(["angry"]);
+                }
+
+                // Sad: sad, depressed
+                if (m.includes("sad") || m.includes("depressed")) {
+                    return pickAvailable(["sad"]);
+                }
+
+                // Frightened: frightened, scared, terrified
+                if (
+                    m.includes("fright") ||
+                    m.includes("scared") ||
+                    m.includes("terrified")
+                ) {
+                    return pickAvailable(["frightened"]);
+                }
+
+                // Sweat: nervous, anxious, worried
+                if (
+                    m.includes("nerveous") ||
+                    m.includes("nervous") ||
+                    m.includes("anxious") ||
+                    m.includes("worried") ||
+                    m.includes("sweat")
+                ) {
+                    return pickAvailable(["sweat"]);
+                }
+
+                // Doya: smug, proud
+                if (
+                    m.includes("doya") ||
+                    m.includes("smug") ||
+                    m.includes("proud")
+                ) {
+                    return pickAvailable(["doya"]);
+                }
+
+                const exact = m.replace(/\s+/g, "").toLowerCase();
+                if (window.rinaExpressions && window.rinaExpressions[exact])
+                    return exact;
+
+                return pickAvailable(["neutral"]);
+            }
+
+            // Helper function to apply a specific expression template
+            function applyExpressionTemplate(expressionKey) {
+                const m = window.rinaModel;
+                if (
+                    !m ||
+                    !window.rinaExpressions ||
+                    !window.rinaExpressions[expressionKey]
+                )
+                    return;
+
+                try {
+                    const params = window.rinaExpressions[expressionKey];
+                    if (
+                        m.internalModel &&
+                        m.internalModel.coreModel &&
+                        typeof m.internalModel.coreModel
+                            .setParameterValueById === "function"
+                    ) {
+                        const core = m.internalModel.coreModel;
+                        for (const p of params) {
+                            if (p && p.Id)
+                                core.setParameterValueById(p.Id, p.Value);
+                        }
+                        console.log(`Applied expression: ${expressionKey}`);
+                    }
+                } catch (e) {
+                    console.debug("Failed to apply expression template", e);
+                }
+            }
+
+            // Return model to default "neutral" expression using the (Exp)Neutral template.
+            function returnToNeutralExpression() {
                 if (lastExpressionTimer) {
                     clearTimeout(lastExpressionTimer);
                     lastExpressionTimer = null;
                 }
 
-                // Reset to neutral first if we're changing from a non-neutral expression
-                if (currentExpression !== 'neutral' && mappedKey !== 'neutral') {
-                    applyExpressionTemplate('neutral');
+                if (currentExpression !== "neutral") {
+                    applyExpressionTemplate("neutral");
+                    currentExpression = "neutral";
                 }
+            }
 
-                // Apply the new expression
-                applyExpressionTemplate(mappedKey);
-                currentExpression = mappedKey;
+            // Apply a mood to the Live2D model using only the loaded (Exp) templates.
+            // This will prefer mapped templates per your mapping rules and do nothing
+            // if no matching template exists.
+            function applyMoodToModel(mood) {
+                const m = window.rinaModel;
+                if (!m) return;
 
-                showMoodDebug(`mood:${mood}->${mappedKey}`);
+                try {
+                    const mappedKey = mapMoodToExpressionKey(mood);
+                    if (!mappedKey || !window.rinaExpressions[mappedKey]) {
+                        console.log("No expression template for mood:", mood);
+                        return;
+                    }
 
-                // Set timer to return to neutral after 10 seconds (unless it's already neutral)
-                if (mappedKey !== 'neutral') {
-                    lastExpressionTimer = setTimeout(() => {
-                        applyExpressionTemplate('neutral');
-                        currentExpression = 'neutral';
+                    // If we're already showing this expression, don't reapply it
+                    if (currentExpression === mappedKey) return;
+
+                    // Clear any existing timer
+                    if (lastExpressionTimer) {
+                        clearTimeout(lastExpressionTimer);
                         lastExpressionTimer = null;
-                    }, 10000);
+                    }
+
+                    // Reset to neutral first if we're changing from a non-neutral expression
+                    if (
+                        currentExpression !== "neutral" &&
+                        mappedKey !== "neutral"
+                    ) {
+                        applyExpressionTemplate("neutral");
+                    }
+
+                    // Apply the new expression
+                    applyExpressionTemplate(mappedKey);
+                    currentExpression = mappedKey;
+
+                    showMoodDebug(`mood:${mood}->${mappedKey}`);
+
+                    // Set timer to return to neutral after 10 seconds (unless it's already neutral)
+                    if (mappedKey !== "neutral") {
+                        lastExpressionTimer = setTimeout(() => {
+                            applyExpressionTemplate("neutral");
+                            currentExpression = "neutral";
+                            lastExpressionTimer = null;
+                        }, 10000);
+                    }
+                } catch (err) {
+                    console.debug("applyMoodToModel failed:", err);
                 }
-            } catch (err) {
-                console.debug('applyMoodToModel failed:', err);
             }
-        }
 
-        // Send message function – now resets to neutral on user input
-        async function sendMessage() {
-            const message = chatInput.value.trim();
-            if (!message) return;
+            // Send message function – now resets to neutral on user input
+            async function sendMessage() {
+                const message = chatInput.value.trim();
+                if (!message) return;
 
-            chatInput.value = '';
-            addUserMessage(message);
-            isWaitingForResponse = true;
-            sendBtn.disabled = true;
+                chatInput.value = "";
+                addUserMessage(message);
+                isWaitingForResponse = true;
+                sendBtn.disabled = true;
 
-            // Reset model to neutral expression immediately when user sends a message
-            returnToNeutralExpression();
+                // Reset model to neutral expression immediately when user sends a message
+                returnToNeutralExpression();
 
-            showTypingIndicator();
+                showTypingIndicator();
 
-            try {
-                const response = await fetch(`/chat`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        message: message,
-                        nsfw_mode: nsfwMode
-                    })
-                });
+                try {
+                    const response = await fetch(`/chat`, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            message: message,
+                            nsfw_mode: nsfwMode,
+                        }),
+                    });
 
-                if (!response.ok) {
-                    throw new Error(`API error: ${response.status}`);
+                    if (!response.ok) {
+                        throw new Error(`API error: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    removeTypingIndicator();
+                    addBotMessage(data.response);
+                    // Apply unseen mood to Live2D model (mood is not displayed in chat)
+                    if (data.mood) {
+                        try {
+                            applyMoodToModel(data.mood);
+                        } catch (e) {
+                            console.debug("Mood apply failed", e);
+                        }
+                        try {
+                            showMoodDebug(data.mood);
+                        } catch (e) {
+                            /* ignore if debug API missing */
+                        }
+                    }
+                } catch (error) {
+                    console.error("Chat error:", error);
+                    removeTypingIndicator();
+                    addBotMessage(
+                        "Hmph... Something went wrong. Try again, will you?",
+                    );
+                } finally {
+                    isWaitingForResponse = false;
+                    sendBtn.disabled = false;
+                    chatInput.focus();
                 }
-
-                const data = await response.json();
-                removeTypingIndicator();
-                addBotMessage(data.response);
-                // Apply unseen mood to Live2D model (mood is not displayed in chat)
-                if (data.mood) {
-                    try { applyMoodToModel(data.mood); } catch (e) { console.debug('Mood apply failed', e); }
-                    try { showMoodDebug(data.mood); } catch (e) { /* ignore if debug API missing */ }
-                }
-            } catch (error) {
-                console.error('Chat error:', error);
-                removeTypingIndicator();
-                addBotMessage("Hmph... Something went wrong. Try again, will you?");
-            } finally {
-                isWaitingForResponse = false;
-                sendBtn.disabled = false;
-                chatInput.focus();
             }
-        }
-    </script>
-</body>
+        </script>
+    </body>
 </html>
