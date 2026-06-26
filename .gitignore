@@ -10,13 +10,15 @@ MEMORY_GUIDE.md
 DOCUMENTATION.md
 MEMORY_GUIDE.md
 .dockerignore
-Dockerfile  
+Dockerfile
 docker-compose.yml
 rina-chan.yaml
 start.bat
+discord_start.bat
 start.sh
 discord_bot.py
 auto_bot.py
 debug.log
 nopush/
+Ming-omni-tts/
 aaaaa

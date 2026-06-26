@@ -152,7 +152,7 @@ def chat():
             'stream': False,
             'options': {
                 'temperature': 0.7,
-                'num_predict': 50,          # hard cap on generated tokens
+                'num_predict': 70,          # hard cap on generated tokens
                 'num_ctx': int(cfg.get('OLLAMA_NUM_CTX') or 2048),
                 'stop': ['\nUser:', '\nRina-chan:'],  # prevent run-on generation
             }
